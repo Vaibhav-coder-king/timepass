@@ -1,0 +1,133 @@
+{
+  "startNodeId": "q1_wandering",
+  "nodes": {
+    "q1_wandering": {
+      "id": "q1_wandering",
+      "question": "Has the patient wandered off, gotten lost outside, or failed to recognise familiar surroundings recently?",
+      "options": [
+        { "label": "Yes", "nextNodeId": "q2_immediate_danger" },
+        { "label": "No", "nextNodeId": "q4_memory_loss" }
+      ]
+    },
+    "q2_immediate_danger": {
+      "id": "q2_immediate_danger",
+      "question": "Is the patient currently missing or in immediate physical danger?",
+      "options": [
+        { "label": "Yes", "nextNodeId": "outcome_emergency_asha" },
+        { "label": "No", "nextNodeId": "q3_night_wandering" }
+      ]
+    },
+    "q3_night_wandering": {
+      "id": "q3_night_wandering",
+      "question": "Does the disorientation or wandering mostly occur during evening or night hours (Sundowning)?",
+      "options": [
+        { "label": "Yes", "nextNodeId": "outcome_sundowning_asha" },
+        { "label": "No", "nextNodeId": "outcome_wandering_monitoring" }
+      ]
+    },
+    "q4_memory_loss": {
+      "id": "q4_memory_loss",
+      "question": "Has the patient shown noticeable difficulty remembering close family names, recent conversations, or daily routines?",
+      "options": [
+        { "label": "Yes", "nextNodeId": "q5_adl_independence" },
+        { "label": "No", "nextNodeId": "q7_mood_behavior" }
+      ]
+    },
+    "q5_adl_independence": {
+      "id": "q5_adl_independence",
+      "question": "Is the patient struggling with basic daily self-care (such as eating, bathing, or getting dressed)?",
+      "options": [
+        { "label": "Yes", "nextNodeId": "outcome_moderate_dementia_asha" },
+        { "label": "No", "nextNodeId": "q6_medication" }
+      ]
+    },
+    "q6_medication": {
+      "id": "q6_medication",
+      "question": "Can the patient manage and take their prescribed medications reliably on their own?",
+      "options": [
+        { "label": "Yes", "nextNodeId": "outcome_mild_cognitive_impairment" },
+        { "label": "No", "nextNodeId": "outcome_medication_risk" }
+      ]
+    },
+    "q7_mood_behavior": {
+      "id": "q7_mood_behavior",
+      "question": "Has the patient shown sudden unexplained agitation, paranoia, hallucinations, or social withdrawal?",
+      "options": [
+        { "label": "Yes", "nextNodeId": "outcome_behavioral_changes" },
+        { "label": "No", "nextNodeId": "outcome_healthy_baseline" }
+      ]
+    },
+    "outcome_emergency_asha": {
+      "id": "outcome_emergency_asha",
+      "isLeaf": true,
+      "urgency": "critical",
+      "flagAsha": true,
+      "title": "Emergency Alert — Active Wandering",
+      "recommendation": "CRITICAL EMERGENCY: Initiate immediate community search. Contact the local ASHA worker and primary health center emergency team immediately. Do not leave the patient unattended.",
+      "ashaNotice": "ASHA Worker Urgent Alert: High-priority immediate dispatch flagged in offline sync log."
+    },
+    "outcome_sundowning_asha": {
+      "id": "outcome_sundowning_asha",
+      "isLeaf": true,
+      "urgency": "high",
+      "flagAsha": true,
+      "title": "High Risk — Nocturnal Disorientation (Sundowning)",
+      "recommendation": "Patient demonstrates severe evening agitation and disorientation. Keep hallways well-lit, install gentle door alarms/chimes, maintain regular evening routines, and consult the ASHA worker for an immediate home assessment.",
+      "ashaNotice": "ASHA Worker Notification: Nocturnal wandering support flagged."
+    },
+    "outcome_wandering_monitoring": {
+      "id": "outcome_wandering_monitoring",
+      "isLeaf": true,
+      "urgency": "moderate",
+      "flagAsha": true,
+      "title": "Moderate Risk — Disorientation Episode",
+      "recommendation": "Provide an identification wristband or card with family telephone and address. Request a routine ASHA community visit to evaluate home safety.",
+      "ashaNotice": "ASHA Worker Notification: Safety & ID check requested."
+    },
+    "outcome_moderate_dementia_asha": {
+      "id": "outcome_moderate_dementia_asha",
+      "isLeaf": true,
+      "urgency": "high",
+      "flagAsha": true,
+      "title": "Significant Functional Decline in Daily Activities",
+      "recommendation": "Impairment in Activities of Daily Living (ADLs) indicates advancing cognitive decline. Patient requires daily caregiver assistance and a clinical review by a PHC medical officer. ASHA worker flagged for caregiver support counseling.",
+      "ashaNotice": "ASHA Worker Notification: Home care assistance & caregiver respite flagged."
+    },
+    "outcome_medication_risk": {
+      "id": "outcome_medication_risk",
+      "isLeaf": true,
+      "urgency": "moderate",
+      "flagAsha": true,
+      "title": "Medication Non-Adherence Risk",
+      "recommendation": "Patient cannot safely self-administer medications. All medications must be locked and supervised by a primary caregiver using labeled day/night pill organizers. ASHA worker alerted for medication adherence audit.",
+      "ashaNotice": "ASHA Worker Notification: Medication audit scheduled."
+    },
+    "outcome_mild_cognitive_impairment": {
+      "id": "outcome_mild_cognitive_impairment",
+      "isLeaf": true,
+      "urgency": "low",
+      "flagAsha": false,
+      "title": "Mild Cognitive Changes — Monitoring & Engagement",
+      "recommendation": "Early memory lapses detected without impairment in daily life. Continue structured daily cognitive exercises (Memory Match, Daily Sequence), maintain social connections, and keep a calm routine. Re-assess in 30 days.",
+      "ashaNotice": "No immediate ASHA dispatch required. Logged for routine monitoring."
+    },
+    "outcome_behavioral_changes": {
+      "id": "outcome_behavioral_changes",
+      "isLeaf": true,
+      "urgency": "moderate",
+      "flagAsha": true,
+      "title": "Behavioral & Psychological Symptoms",
+      "recommendation": "Sudden behavioral changes may stem from discomfort, infection, or dementia progression. Maintain gentle non-confrontational communication, reduce loud stimuli, and consult the ASHA worker for an evaluation.",
+      "ashaNotice": "ASHA Worker Notification: Behavioral assessment request flagged."
+    },
+    "outcome_healthy_baseline": {
+      "id": "outcome_healthy_baseline",
+      "isLeaf": true,
+      "urgency": "low",
+      "flagAsha": false,
+      "title": "Cognitive Baseline Stable",
+      "recommendation": "No acute red-flag cognitive or safety symptoms detected. Continue regular physical activity, social engagement, and brain-stimulating games. Perform this check again next month or if any changes occur.",
+      "ashaNotice": "Routine wellness check recorded."
+    }
+  }
+}

@@ -44,7 +44,17 @@ export type DictionaryKey =
   | 'nav.play'
   | 'nav.mira'
   | 'nav.memories'
-  | 'nav.more';
+  | 'nav.more'
+  // Game instructions & audio
+  | 'game.memory.instruction'
+  | 'game.sequence.morningPrompt'
+  | 'game.sequence.rightOrderPrompt'
+  | 'game.sequence.eveningPrompt'
+  | 'game.sequence.mealPrompt'
+  | 'game.sequence.hint'
+  | 'game.audio.mute'
+  | 'game.audio.unmute'
+  | 'game.audio.listenAgain';
 
 type Dictionary = Record<DictionaryKey, string>;
 type LocaleDictionary = Record<SupportedLocale, Dictionary>;
@@ -75,6 +85,16 @@ const DICTIONARY: LocaleDictionary = {
     'nav.mira':     'MIRA',
     'nav.memories': 'Memories',
     'nav.more':     'More',
+    // Game instructions & audio
+    'game.memory.instruction':        'Tap two cards to find a pair.',
+    'game.sequence.morningPrompt':    'Arrange these morning activities:',
+    'game.sequence.rightOrderPrompt': 'Put these in the right order:',
+    'game.sequence.eveningPrompt':    'Arrange these evening activities:',
+    'game.sequence.mealPrompt':       'Put these meal-time steps in order:',
+    'game.sequence.hint':             'Use the arrows to reorder, then tap That\'s My Order',
+    'game.audio.mute':                'Mute voice instructions',
+    'game.audio.unmute':              'Unmute voice instructions',
+    'game.audio.listenAgain':         'Listen to instruction again',
   },
 
   hi: {
@@ -102,6 +122,16 @@ const DICTIONARY: LocaleDictionary = {
     'nav.mira':     'MIRA',
     'nav.memories': 'यादें',
     'nav.more':     'अधिक',
+    // Game instructions & audio
+    'game.memory.instruction':        'जोड़ी खोजने के लिए दो कार्ड छुएं।',
+    'game.sequence.morningPrompt':    'इन सुबह की गतिविधियों को क्रम में लगाएं:',
+    'game.sequence.rightOrderPrompt': 'इन्हें सही क्रम में रखें:',
+    'game.sequence.eveningPrompt':    'इन शाम की गतिविधियों को क्रम में लगाएं:',
+    'game.sequence.mealPrompt':       'भोजन के समय के इन चरणों को क्रम में रखें:',
+    'game.sequence.hint':             'क्रम बदलने के लिए तीरों का उपयोग करें, फिर \'यह मेरा क्रम है\' पर टैप करें',
+    'game.audio.mute':                'आवाज़ बंद करें',
+    'game.audio.unmute':              'आवाज़ चालू करें',
+    'game.audio.listenAgain':         'निर्देश दोबारा सुनें',
   },
 
   as: {
@@ -129,6 +159,16 @@ const DICTIONARY: LocaleDictionary = {
     'nav.mira':     'MIRA',
     'nav.memories': 'স্মৃতি',
     'nav.more':     'অধিক',
+    // Game instructions & audio
+    'game.memory.instruction':        'জোৰ বিচাৰিবলৈ দুখন কাৰ্ড স্পৰ্শ কৰক।',
+    'game.sequence.morningPrompt':    'এই ৰাতিপুৱাৰ কাৰ্যকলাপবোৰ ক্ৰমত সজাওক:',
+    'game.sequence.rightOrderPrompt': 'এইবোৰ সঠিক ক্ৰমত ৰাখক:',
+    'game.sequence.eveningPrompt':    'এই সন্ধিয়াৰ কাৰ্যকলাপবোৰ ক্ৰমত সজাওক:',
+    'game.sequence.mealPrompt':       'আহাৰ গ্ৰহণৰ এই পদক্ষেপবোৰ ক্ৰমত ৰাখক:',
+    'game.sequence.hint':             'ক্ৰম সলনি কৰিবলৈ কাঁড় ব্যৱহাৰ কৰক, তাৰ পিছত \'এয়া মোৰ ক্ৰম\'ত টিপক',
+    'game.audio.mute':                'মাত বন্ধ কৰক',
+    'game.audio.unmute':              'মাত খোলক',
+    'game.audio.listenAgain':         'নিৰ্দেশনা পুনৰ শুনক',
   },
 };
 

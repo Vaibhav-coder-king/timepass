@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Volume2 } from 'lucide-react';
 import {
   getCurrentLevel,
   getPairsForLevel,
@@ -11,6 +12,8 @@ import {
 import { saveSession } from '../utils/storage';
 import { syncPendingSessions } from '../services/syncService';
 import { GameHeader, StatsBar, CompletionScreen } from './GameShared';
+import { useLanguage } from '../context/LanguageContext';
+import { useOfflineAudio } from '../hooks/useOfflineAudio';
 
 // ─── NE Indian cultural emoji pairs pool ──────────────────────────────────────
 // 6 pairs available (Level 4 maximum)
@@ -66,6 +69,12 @@ function formatTime(sec: number): string {
 
 export function MemoryMatch() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
+  const instruction = t('game.memory.instruction');
+
+  const { speak, isSpeaking, isMuted, toggleMute } = useOfflineAudio({
+    autoSpeakText: instruction,
+  });
 
   // ── Adaptive level ──────────────────────────────────────────────────────────
   const [level]   = useState(() => getCurrentLevel());
@@ -234,6 +243,7 @@ export function MemoryMatch() {
     setHintUid(null);
     setIdleHintUid(null);
     resetIdleTimer(newCards);
+    speak(instruction);
   };
 
   // ── Completion screen ───────────────────────────────────────────────────────
@@ -265,6 +275,9 @@ export function MemoryMatch() {
         onBack={() => navigate('/games')}
         onReset={handleReset}
         syncTrigger={syncTrigger}
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+        isSpeaking={isSpeaking}
       />
 
       {/* Stats */}
@@ -276,7 +289,7 @@ export function MemoryMatch() {
         rightColor="rgb(var(--color-primary))"
       />
 
-      {/* Level badge + hint */}
+      {/* Level badge + localized hint with TTS replay button */}
       <div className="flex items-center justify-between px-4 py-1 flex-shrink-0">
         <span
           className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
@@ -287,9 +300,23 @@ export function MemoryMatch() {
         >
           Level {level}
         </span>
-        <p className="text-xs text-[rgb(var(--color-text-secondary))]">
-          Tap two cards to find a pair
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-xs text-[rgb(var(--color-text-secondary))]">
+            {instruction}
+          </p>
+          <button
+            onClick={() => speak(instruction)}
+            aria-label={t('game.audio.listenAgain')}
+            title={t('game.audio.listenAgain')}
+            className="flex items-center justify-center p-1 rounded-lg text-[rgb(var(--color-primary))] hover:bg-[rgba(var(--color-primary),0.1)] active:scale-95 transition-all border border-transparent dark:bg-slate-800 dark:text-white dark:border-blue-400"
+          >
+            <Volume2
+              className={`w-4 h-4 ${
+                isSpeaking && !isMuted ? 'animate-pulse text-[rgb(var(--color-primary))]' : ''
+              }`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Card Grid — flex-1, centered */}
@@ -366,7 +393,7 @@ function MemoryCard({ card, emojiClass, isHinted, isIdleHint, isLocked, onTap }:
         aria-label={isVisible ? `${card.label}${card.isMatched ? ' — matched' : ''}` : 'Hidden card'}
         aria-pressed={isVisible}
         whileTap={!card.isMatched && !isLocked ? { scale: 0.91 } : {}}
-        className="absolute inset-0 rounded-2xl overflow-hidden"
+        className="absolute inset-0 rounded-2xl overflow-hidden border-2 border-transparent dark:bg-slate-800 dark:text-white dark:border-blue-400"
         style={{
           outline: showHint
             ? isHinted
@@ -384,7 +411,7 @@ function MemoryCard({ card, emojiClass, isHinted, isIdleHint, isLocked, onTap }:
               animate={{ rotateY: 0 }}
               exit={{ rotateY: 90 }}
               transition={{ duration: 0.22 }}
-              className={`absolute inset-0 flex items-center justify-center ${emojiClass}`}
+              className={`absolute inset-0 flex items-center justify-center ${emojiClass} dark:bg-slate-800 dark:text-white dark:border-blue-400 border-2`}
               style={{
                 background: card.isMatched ? 'rgb(240 253 244)' : 'rgb(255 251 235)', // green-50 : amber-50
                 border: `2px solid ${card.isMatched ? 'rgb(134 239 172)' : 'rgb(253 230 138)'}`,
@@ -401,7 +428,7 @@ function MemoryCard({ card, emojiClass, isHinted, isIdleHint, isLocked, onTap }:
               animate={{ rotateY: 0 }}
               exit={{ rotateY: -90 }}
               transition={{ duration: 0.22 }}
-              className="absolute inset-0 flex items-center justify-center rounded-2xl text-white text-2xl"
+              className="absolute inset-0 flex items-center justify-center rounded-2xl text-white text-2xl dark:bg-slate-800 dark:text-white dark:border-blue-400 border-2 border-transparent"
               style={{
                 background: 'linear-gradient(135deg, rgb(99 102 241) 0%, rgb(168 85 247) 100%)',
               }}

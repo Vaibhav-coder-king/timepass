@@ -57,6 +57,13 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
     html.setAttribute('data-reduced-motion', String(settings.reducedMotion));
     html.setAttribute('lang', settings.languageCode);
 
+    // Toggle dark class for Tailwind dark mode styling
+    if (settings.contrastMode === 'high-contrast') {
+      html.classList.add('dark');
+    } else {
+      html.classList.remove('dark');
+    }
+
     // Persist to localStorage
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));

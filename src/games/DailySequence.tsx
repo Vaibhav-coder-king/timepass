@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, ArrowUp, ArrowDown } from 'lucide-react';
+import { CheckCircle2, ArrowUp, ArrowDown, Volume2 } from 'lucide-react';
 import { getCurrentLevel } from '../utils/adaptiveEngine';
 import { saveSession } from '../utils/storage';
 import { syncPendingSessions } from '../services/syncService';
 import { GameHeader, StatsBar, CompletionScreen } from './GameShared';
+import { useLanguage, type DictionaryKey } from '../context/LanguageContext';
+import { useOfflineAudio } from '../hooks/useOfflineAudio';
 
 // ─── Question bank ────────────────────────────────────────────────────────────
 
@@ -16,13 +18,15 @@ interface Activity {
 }
 
 interface Question {
-  prompt: string;
+  promptKey: DictionaryKey;
+  promptFallback: string;
   correctOrder: Activity[];
 }
 
 const QUESTIONS: Question[] = [
   {
-    prompt: 'Arrange these morning activities:',
+    promptKey: 'game.sequence.morningPrompt',
+    promptFallback: 'Arrange these morning activities:',
     correctOrder: [
       { id: 'wake',  emoji: '🌅', label: 'Wake Up' },
       { id: 'tea',   emoji: '☕', label: 'Drink Tea' },
@@ -30,7 +34,8 @@ const QUESTIONS: Question[] = [
     ],
   },
   {
-    prompt: 'Put these in the right order:',
+    promptKey: 'game.sequence.rightOrderPrompt',
+    promptFallback: 'Put these in the right order:',
     correctOrder: [
       { id: 'brush', emoji: '🪥', label: 'Brush Teeth' },
       { id: 'bath',  emoji: '🚿', label: 'Take Bath' },
@@ -38,7 +43,8 @@ const QUESTIONS: Question[] = [
     ],
   },
   {
-    prompt: 'Arrange these evening activities:',
+    promptKey: 'game.sequence.eveningPrompt',
+    promptFallback: 'Arrange these evening activities:',
     correctOrder: [
       { id: 'walk', emoji: '🚶', label: 'Evening Walk' },
       { id: 'dine', emoji: '🍽️', label: 'Have Dinner' },
@@ -46,7 +52,8 @@ const QUESTIONS: Question[] = [
     ],
   },
   {
-    prompt: 'Put these meal-time steps in order:',
+    promptKey: 'game.sequence.mealPrompt',
+    promptFallback: 'Put these meal-time steps in order:',
     correctOrder: [
       { id: 'wash', emoji: '🤲', label: 'Wash Hands' },
       { id: 'eat',  emoji: '🍛', label: 'Eat Meal' },
@@ -85,6 +92,7 @@ type Phase = 'playing' | 'complete';
 export function DailySequence() {
   const navigate = useNavigate();
   const level    = getCurrentLevel();
+  const { t }    = useLanguage();
 
   const [question,    setQuestion]    = useState<Question>(pickQuestion);
   const [items,       setItems]       = useState<Activity[]>(() => shuffle(question.correctOrder));
@@ -93,6 +101,14 @@ export function DailySequence() {
   const [syncTrigger, setSyncTrigger] = useState(0);
   const [wrongShake,  setWrongShake]  = useState(false);
   const [miraMessage, setMiraMessage] = useState('');
+
+  const promptText = t(question.promptKey) || question.promptFallback;
+  const hintText = t('game.sequence.hint');
+  const fullInstruction = `${promptText} ${hintText}`;
+
+  const { speak, isSpeaking, isMuted, toggleMute } = useOfflineAudio({
+    autoSpeakText: fullInstruction,
+  });
 
   // Timer — starts on first arrow press
   const startTimeRef     = useRef<number | null>(null);
@@ -160,6 +176,8 @@ export function DailySequence() {
     setElapsedSec(0);
     setPhase('playing');
     setWrongShake(false);
+    const nextPrompt = t(q.promptKey) || q.promptFallback;
+    speak(`${nextPrompt} ${hintText}`);
   };
 
   // ── Completion ──────────────────────────────────────────────────────────────
@@ -196,6 +214,9 @@ export function DailySequence() {
         onBack={() => navigate('/games')}
         onReset={handleReset}
         syncTrigger={syncTrigger}
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+        isSpeaking={isSpeaking}
       />
 
       {/* Stats */}
@@ -209,13 +230,27 @@ export function DailySequence() {
 
       {/* Main */}
       <main className="flex-1 flex flex-col px-4 pt-2 pb-4 gap-3 overflow-hidden">
-        {/* Prompt */}
-        <p
-          className="text-center font-semibold text-[rgb(var(--color-text-primary))]"
-          style={{ fontSize: 'var(--text-base)' }}
-        >
-          {question.prompt}
-        </p>
+        {/* Prompt with localized text and TTS replay speaker button */}
+        <div className="flex items-center justify-center gap-2">
+          <p
+            className="text-center font-semibold text-[rgb(var(--color-text-primary))]"
+            style={{ fontSize: 'var(--text-base)' }}
+          >
+            {promptText}
+          </p>
+          <button
+            onClick={() => speak(fullInstruction)}
+            aria-label={t('game.audio.listenAgain')}
+            title={t('game.audio.listenAgain')}
+            className="flex items-center justify-center p-1.5 rounded-xl text-[rgb(var(--color-primary))] hover:bg-[rgba(var(--color-primary),0.1)] active:scale-95 transition-all flex-shrink-0 border border-transparent dark:bg-slate-800 dark:text-white dark:border-blue-400"
+          >
+            <Volume2
+              className={`w-4 h-4 ${
+                isSpeaking && !isMuted ? 'animate-pulse text-[rgb(var(--color-primary))]' : ''
+              }`}
+            />
+          </button>
+        </div>
 
         {/* Orderable rows */}
         <motion.div
@@ -264,13 +299,13 @@ export function DailySequence() {
           className="text-center text-[rgb(var(--color-text-secondary))]"
           style={{ fontSize: 'var(--text-xs)' }}
         >
-          Use the arrows ↑↓ to reorder, then tap "That's My Order"
+          {hintText}
         </p>
 
         {/* Submit */}
         <button
           onClick={handleSubmit}
-          className="w-full font-bold rounded-3xl text-white flex items-center justify-center gap-2 transition-transform active:scale-95 mt-auto flex-shrink-0"
+          className="w-full font-bold rounded-3xl text-white flex items-center justify-center gap-2 transition-transform active:scale-95 mt-auto flex-shrink-0 border-2 border-transparent dark:bg-slate-800 dark:text-white dark:border-blue-400"
           style={{
             height: 64,
             fontSize: 'var(--text-lg)',
@@ -342,7 +377,7 @@ function ActivityRow({ item, index, total, onMoveUp, onMoveDown }: ActivityRowPr
           onClick={onMoveUp}
           disabled={index === 0}
           aria-label={`Move ${item.label} up`}
-          className="flex items-center justify-center rounded-xl transition-colors disabled:opacity-25 hover:bg-[rgba(var(--color-primary),0.1)]"
+          className="flex items-center justify-center rounded-xl transition-colors disabled:opacity-25 hover:bg-[rgba(var(--color-primary),0.1)] border border-transparent dark:bg-slate-800 dark:text-white dark:border-blue-400"
           style={{ width: 52, height: 36, color: 'rgb(var(--color-primary))' }}
         >
           <ArrowUp className="w-5 h-5" aria-hidden="true" />
@@ -351,7 +386,7 @@ function ActivityRow({ item, index, total, onMoveUp, onMoveDown }: ActivityRowPr
           onClick={onMoveDown}
           disabled={index === total - 1}
           aria-label={`Move ${item.label} down`}
-          className="flex items-center justify-center rounded-xl transition-colors disabled:opacity-25 hover:bg-[rgba(var(--color-primary),0.1)]"
+          className="flex items-center justify-center rounded-xl transition-colors disabled:opacity-25 hover:bg-[rgba(var(--color-primary),0.1)] border border-transparent dark:bg-slate-800 dark:text-white dark:border-blue-400"
           style={{ width: 52, height: 36, color: 'rgb(var(--color-primary))' }}
         >
           <ArrowDown className="w-5 h-5" aria-hidden="true" />

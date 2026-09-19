@@ -1,11 +1,13 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, RotateCcw } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Volume2, VolumeX } from 'lucide-react';
 import { SyncIndicator } from '../components/SyncIndicator';
+import { useAccessibility } from '../context/AccessibilityContext';
+import { useLanguage } from '../context/LanguageContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GameHeader
-// Shared top bar for all game screens: back · title · sync + restart
+// Shared top bar for all game screens: back · title · mute · sync + restart
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface GameHeaderProps {
@@ -13,10 +15,28 @@ interface GameHeaderProps {
   onBack: () => void;
   onReset: () => void;
   syncTrigger: number;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
+  isSpeaking?: boolean;
   children?: React.ReactNode; // optional stats slot
 }
 
-export function GameHeader({ title, onBack, onReset, syncTrigger, children }: GameHeaderProps) {
+export function GameHeader({
+  title,
+  onBack,
+  onReset,
+  syncTrigger,
+  isMuted,
+  onToggleMute,
+  isSpeaking,
+  children,
+}: GameHeaderProps) {
+  const { settings, setSoundEnabled } = useAccessibility();
+  const { t } = useLanguage();
+
+  const muted = isMuted ?? !settings.soundEnabled;
+  const handleToggleMute = onToggleMute ?? (() => setSoundEnabled(muted));
+
   return (
     <header
       className="w-full flex flex-col gap-1.5 px-4 pt-4 pb-2 flex-shrink-0"
@@ -26,7 +46,7 @@ export function GameHeader({ title, onBack, onReset, syncTrigger, children }: Ga
         <button
           onClick={onBack}
           aria-label="Go back to game hub"
-          className="flex items-center justify-center rounded-2xl active:scale-95 active:opacity-75 transition-all"
+          className="flex items-center justify-center rounded-2xl active:scale-95 active:opacity-75 transition-all border border-transparent dark:bg-slate-800 dark:text-white dark:border-blue-400"
           style={{
             width: 56,
             height: 56,
@@ -45,11 +65,39 @@ export function GameHeader({ title, onBack, onReset, syncTrigger, children }: Ga
         </h1>
 
         <div className="flex items-center gap-1.5">
+          {/* Mute / Unmute TTS voice toggle */}
+          <button
+            onClick={handleToggleMute}
+            aria-label={muted ? t('game.audio.unmute') : t('game.audio.mute')}
+            title={muted ? t('game.audio.unmute') : t('game.audio.mute')}
+            className={`flex items-center justify-center rounded-2xl active:scale-95 active:opacity-75 transition-all relative border border-transparent dark:bg-slate-800 dark:text-white dark:border-blue-400 ${
+              isSpeaking && !muted ? 'ring-2 ring-[rgb(var(--color-primary))]' : ''
+            }`}
+            style={{
+              width: 56,
+              height: 56,
+              color: muted ? 'rgb(var(--color-text-secondary))' : 'rgb(var(--color-primary))',
+              background: muted ? 'rgba(0,0,0,0.05)' : 'rgba(var(--color-primary),0.12)',
+            }}
+          >
+            {muted ? (
+              <VolumeX className="w-5 h-5" />
+            ) : (
+              <Volume2 className="w-5 h-5" />
+            )}
+            {isSpeaking && !muted && (
+              <span
+                className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[rgb(var(--color-primary))] animate-ping"
+                aria-hidden="true"
+              />
+            )}
+          </button>
+
           <SyncIndicator refreshTrigger={syncTrigger} />
           <button
             onClick={onReset}
             aria-label="Restart game"
-            className="flex items-center justify-center rounded-2xl active:scale-95 active:opacity-75 transition-all"
+            className="flex items-center justify-center rounded-2xl active:scale-95 active:opacity-75 transition-all border border-transparent dark:bg-slate-800 dark:text-white dark:border-blue-400"
             style={{
               width: 56,
               height: 56,
@@ -243,7 +291,7 @@ export function CompletionScreen({
       >
         <button
           onClick={onPlayAgain}
-          className="w-full font-bold rounded-3xl text-white flex items-center justify-center transition-transform active:scale-95"
+          className="w-full font-bold rounded-3xl text-white flex items-center justify-center transition-transform active:scale-95 border-2 border-transparent dark:bg-slate-800 dark:text-white dark:border-blue-400"
           style={{
             height: 64,
             fontSize: 'var(--text-lg)',
@@ -255,12 +303,11 @@ export function CompletionScreen({
         </button>
         <button
           onClick={onHome}
-          className="w-full font-bold rounded-3xl flex items-center justify-center transition-transform active:scale-95"
+          className="w-full font-bold rounded-3xl flex items-center justify-center transition-transform active:scale-95 border-2 border-[rgba(var(--color-text-primary),0.15)] dark:bg-slate-800 dark:text-white dark:border-blue-400"
           style={{
             height: 60,
             fontSize: 'var(--text-base)',
             background: 'transparent',
-            border: '2px solid rgba(var(--color-text-primary),0.15)',
             color: 'rgb(var(--color-text-secondary))',
           }}
         >

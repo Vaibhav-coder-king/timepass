@@ -105,7 +105,20 @@ export interface AnalyticsData {
 }
 
 export async function fetchAnalytics(): Promise<AnalyticsData> {
+  let authHeader = '';
+  try {
+    const rawAuth = localStorage.getItem('cogniva_auth_state');
+    if (rawAuth) {
+      const parsed = JSON.parse(rawAuth);
+      if (parsed.token) authHeader = `Bearer ${parsed.token}`;
+    }
+  } catch { /* ignore */ }
+
+  const headers: Record<string, string> = {};
+  if (authHeader) headers['Authorization'] = authHeader;
+
   const response = await fetch(`${API_URL}/analytics`, {
+    headers,
     signal: AbortSignal.timeout(8_000),
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
