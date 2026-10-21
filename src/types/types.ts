@@ -2,11 +2,13 @@
 export type TextSize = 'standard' | 'large' | 'extra-large';
 export type ContrastMode = 'standard' | 'high-contrast';
 export type VoiceSpeed = 'slow' | 'normal' | 'fast';
+export type VoiceGender = 'female' | 'male';
 
 export interface AccessibilitySettings {
   textSize: TextSize;
   contrastMode: ContrastMode;
   voiceSpeed: VoiceSpeed;
+  voiceGender: VoiceGender;
   reducedMotion: boolean;
   soundEnabled: boolean;
   languageCode: string; // e.g. 'en', 'hi', 'as', 'bn'

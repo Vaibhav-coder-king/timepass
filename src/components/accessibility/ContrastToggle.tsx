@@ -26,7 +26,7 @@ export function ContrastToggle({ className }: ContrastToggleProps) {
           setContrastMode(isHighContrast ? 'standard' : 'high-contrast')
         }
         className={clsx(
-          'w-full flex items-center justify-between gap-4 rounded-2xl border-2 p-5 transition-all duration-300 min-h-[80px]',
+          'w-full flex items-center justify-between gap-4 rounded-2xl border-2 p-5 transition-all duration-300 min-h-[72px]',
           isHighContrast
             ? 'border-white bg-black text-white'
             : 'border-[rgba(var(--color-text-primary),0.15)] bg-[rgb(var(--color-surface-card))] text-[rgb(var(--color-text-primary))]'
@@ -34,9 +34,9 @@ export function ContrastToggle({ className }: ContrastToggleProps) {
       >
         <div className="flex items-center gap-4">
           {isHighContrast ? (
-            <Moon className="w-8 h-8 flex-shrink-0" aria-hidden="true" />
+            <Moon className="w-7 h-7 flex-shrink-0" aria-hidden="true" />
           ) : (
-            <Sun className="w-8 h-8 flex-shrink-0" aria-hidden="true" />
+            <Sun className="w-7 h-7 flex-shrink-0" aria-hidden="true" />
           )}
           <div className="text-left">
             <span
@@ -56,19 +56,19 @@ export function ContrastToggle({ className }: ContrastToggleProps) {
           </div>
         </div>
 
-        {/* Toggle pill */}
+        {/* Compact Toggle pill */}
         <div
           aria-hidden="true"
           className={clsx(
-            'relative flex-shrink-0 w-14 h-8 rounded-full transition-colors duration-300',
+            'relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-300',
             isHighContrast ? 'bg-white' : 'bg-[rgba(var(--color-text-primary),0.2)]'
           )}
         >
           <div
             className={clsx(
-              'absolute top-1 w-6 h-6 rounded-full transition-transform duration-300',
+              'absolute top-1 w-4 h-4 rounded-full transition-transform duration-300',
               isHighContrast
-                ? 'translate-x-7 bg-black'
+                ? 'translate-x-6 bg-black'
                 : 'translate-x-1 bg-white'
             )}
           />

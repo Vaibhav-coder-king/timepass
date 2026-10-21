@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import type { AccessibilitySettings, ContrastMode, TextSize, VoiceSpeed } from '../types/types';
+import type { AccessibilitySettings, ContrastMode, TextSize, VoiceSpeed, VoiceGender } from '../types/types';
 
 // ─── Default Settings ───────────────────────────────────────────────────────
 
@@ -13,6 +13,7 @@ const DEFAULT_SETTINGS: AccessibilitySettings = {
   textSize: 'large',          // Default to large for elderly users
   contrastMode: 'standard',
   voiceSpeed: 'normal',
+  voiceGender: 'female',      // Default to warm female voice for MIRA
   reducedMotion: false,
   soundEnabled: true,
   languageCode: 'en',
@@ -27,6 +28,7 @@ interface AccessibilityContextValue {
   setTextSize: (size: TextSize) => void;
   setContrastMode: (mode: ContrastMode) => void;
   setVoiceSpeed: (speed: VoiceSpeed) => void;
+  setVoiceGender: (gender: VoiceGender) => void;
   setReducedMotion: (value: boolean) => void;
   setSoundEnabled: (value: boolean) => void;
   setLanguageCode: (code: string) => void;
@@ -97,6 +99,10 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
     setSettings(prev => ({ ...prev, voiceSpeed }));
   }, []);
 
+  const setVoiceGender = useCallback((voiceGender: VoiceGender) => {
+    setSettings(prev => ({ ...prev, voiceGender }));
+  }, []);
+
   const setReducedMotion = useCallback((reducedMotion: boolean) => {
     setSettings(prev => ({ ...prev, reducedMotion }));
   }, []);
@@ -120,6 +126,7 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
         setTextSize,
         setContrastMode,
         setVoiceSpeed,
+        setVoiceGender,
         setReducedMotion,
         setSoundEnabled,
         setLanguageCode,

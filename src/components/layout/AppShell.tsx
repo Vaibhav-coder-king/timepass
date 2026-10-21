@@ -23,7 +23,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
       <MiraFloatingButton
         state={session.state}
-        onActivate={() => { activate(); alert('MIRA Voice Assistant Activated'); }}
+        onActivate={activate}
       />
 
       {/* MIRA Conversational Panel */}

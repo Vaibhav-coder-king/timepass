@@ -75,10 +75,16 @@ export function ProtectedRoute({ children, allowedRoles = ['Hospital', 'NGO', 'F
     }
   };
 
-  const fillDemo = (u: string, p: string) => {
+  const fillDemo = async (u: string, p: string) => {
     setUsername(u);
     setPassword(p);
     setError(null);
+    setIsLoading(true);
+    const success = await login(u, p);
+    setIsLoading(false);
+    if (!success) {
+      setError('Invalid username or password.');
+    }
   };
 
   return (

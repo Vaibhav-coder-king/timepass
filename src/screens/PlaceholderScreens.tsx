@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
+export { SettingsScreen as Settings } from './SettingsScreen';
 
 interface PlaceholderProps {
   emoji: string;
@@ -144,17 +145,6 @@ export function Memories() {
       title="Memories"
       subtitle="Cherished photos and family moments will live here for you to revisit."
       accent="rgb(236,72,153)"
-    />
-  );
-}
-
-export function Settings() {
-  return (
-    <PlaceholderScreen
-      emoji="⚙️"
-      title="Settings"
-      subtitle="Font size, contrast, language, and accessibility preferences."
-      accent="rgb(124,92,252)"
     />
   );
 }

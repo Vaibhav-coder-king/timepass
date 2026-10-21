@@ -17,7 +17,6 @@ interface UseMiraVoiceStateReturn {
 /**
  * Manages MIRA voice state machine:
  * idle → listening → processing → speaking → idle
- * Any state can transition to error.
  */
 export function useMiraVoiceState({
   onTranscript,
@@ -36,18 +35,9 @@ export function useMiraVoiceState({
 
   const handleFinalTranscript = useCallback(
     (text: string) => {
+      clearTimer();
       onTranscript(text);
       onStateChange('processing');
-
-      // Simulate processing → speaking transition (real: await API call)
-      processingTimerRef.current = setTimeout(() => {
-        onStateChange('speaking');
-
-        // Simulate speaking → idle after demo response
-        processingTimerRef.current = setTimeout(() => {
-          onStateChange('idle');
-        }, 4000);
-      }, 1500);
     },
     [onTranscript, onStateChange]
   );
@@ -83,8 +73,7 @@ export function useMiraVoiceState({
   const stop = useCallback(() => {
     clearTimer();
     stopListening();
-    onStateChange('idle');
-  }, [stopListening, onStateChange]);
+  }, [stopListening]);
 
   return { startListening: start, stopListening: stop };
 }

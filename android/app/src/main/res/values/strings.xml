@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">COGNIVA</string>
-    <string name="title_activity_main">COGNIVA</string>
-    <string name="package_name">com.cogniva.dementia.app</string>
-    <string name="custom_url_scheme">com.cogniva.dementia.app</string>
-</resources>

@@ -1,10 +1,11 @@
 @echo off
-title COGNIVA — Starting App
+title COGNIVA — Single Merged HTTP Service
 color 0A
 
 echo.
 echo  =========================================
 echo    COGNIVA - Cognitive Gaming Platform
+echo    Single Merged HTTP Service (Port 5000)
 echo  =========================================
 echo.
 
@@ -41,29 +42,24 @@ REM ── Install backend deps ────────────────
 echo  [INFO] Ensuring backend dependencies are installed...
 python -m pip install flask flask-cors --quiet
 
-REM ── Start Flask backend in a new window ──────────────────────────────────────
-echo  [INFO] Starting Flask backend on http://localhost:5000 ...
-start "COGNIVA Backend (Flask)" cmd /k "python backend\app.py"
+REM ── Build frontend if dist is missing ────────────────────────────────────────
+if not exist "dist" (
+    echo  [INFO] Building frontend for single HTTP service...
+    call npm run build
+)
 
-REM ── Small delay so backend starts first ──────────────────────────────────────
-timeout /t 2 /nobreak >nul
+REM ── Free port 5000 if previously locked ──────────────────────────────────────
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5000') do taskkill /f /pid %%a >nul 2>&1
 
-REM ── Start Vite frontend in a new window ──────────────────────────────────────
-echo  [INFO] Starting React frontend on http://localhost:5173 ...
-start "COGNIVA Frontend (Vite)" cmd /k "npm run dev"
-
-REM ── Open browser after a short delay ─────────────────────────────────────────
-timeout /t 4 /nobreak >nul
-start http://localhost:5173
-
+REM ── Launch single merged HTTP server and open browser ────────────────────────
 echo.
 echo  =========================================
-echo    Both servers are running!
+echo    Single Merged HTTP Server Running!
 echo.
-echo    Frontend : http://localhost:5173
-echo    Backend  : http://localhost:5000
-echo.
-echo    Close the two terminal windows to stop.
+echo    Unified App : http://localhost:5000
+echo    Mobile / LAN: http://<LAN-IP>:5000
 echo  =========================================
 echo.
-pause
+
+start http://localhost:5000
+python -u backend\app.py

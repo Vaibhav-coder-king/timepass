@@ -5,42 +5,84 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    host: true, // Listen on all network addresses for mobile Android testing
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:5000',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      // Pre-cache all static assets aggressively — app boots with zero network
-      includeAssets: ['favicon.ico', '*.png', '*.svg', '*.woff2'],
+      injectRegister: 'auto',
+      includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
-        name: 'COGNIVA — Cognitive Care',
+        id: '/',
+        name: 'COGNIVA — Cognitive Care & Memory Companion',
         short_name: 'COGNIVA',
-        description: 'A warm, intelligent memory companion for elderly patients',
+        description: 'AI-Based Cognitive Gaming & Memory Assistance Platform for Elderly Dementia Patients in NER',
         theme_color: '#7C5CFC',
         background_color: '#FFF9F0',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
+        start_url: '/?source=pwa',
         scope: '/',
+        lang: 'en',
+        dir: 'ltr',
+        categories: ['medical', 'health', 'games'],
+        prefer_related_applications: false,
         icons: [
           {
-            src: '/vite.svg',
+            src: '/pwa-192x192.png',
             sizes: '192x192',
-            type: 'image/svg+xml',
-            purpose: 'any maskable',
+            type: 'image/png',
+            purpose: 'any',
           },
           {
-            src: '/vite.svg',
+            src: '/pwa-maskable-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: '/pwa-512x512.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'any',
+          },
+          {
+            src: '/pwa-maskable-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+        shortcuts: [
+          {
+            name: 'Play Games',
+            short_name: 'Games',
+            description: 'Engage your mind with memory match & sequence games',
+            url: '/games',
+            icons: [{ src: '/pwa-192x192.png', sizes: '192x192' }],
+          },
+          {
+            name: 'Care Insights',
+            short_name: 'Insights',
+            description: 'View patient memory accuracy and response times',
+            url: '/caregiver',
+            icons: [{ src: '/pwa-192x192.png', sizes: '192x192' }],
           },
         ],
       },
       workbox: {
-        // Aggressively cache all build artifacts
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot}'],
-        // Cache-first for Google Fonts (1 year TTL)
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot,json}'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -60,10 +102,14 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
-          // Network-first for our own API calls (fall through to offline gracefully)
           {
             urlPattern: /\/api\/.*/i,
-            handler: 'NetworkOnly',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              networkTimeoutSeconds: 5,
+              cacheableResponse: { statuses: [0, 200] },
+            },
           },
         ],
       },

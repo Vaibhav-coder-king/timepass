@@ -11,17 +11,18 @@ import { MemoryMatch } from './games/MemoryMatch';
 import { DailySequence } from './games/DailySequence';
 import { CaregiverDashboard } from './screens/CaregiverDashboard';
 import { TriageChatbot } from './screens/TriageChatbot';
-import { MyDay, Reminders, Memories, Settings } from './screens/PlaceholderScreens';
+import { SettingsScreen } from './screens/SettingsScreen';
+import { MyDay, Reminders, Memories } from './screens/PlaceholderScreens';
 
 /**
- * COGNIVA Application — Phase 1 + 2 + 3 + 4 + RBAC
+ * COGNIVA Application — PWA + MIRA AI (Gemini) + Cognitive Games + Caregiver Analytics
  *
  * Routes:
  *   /                        → Patient Home Screen
- *   /my-day                  → My Day (placeholder)
- *   /reminders               → Reminders (placeholder)
- *   /memories                → Memories (placeholder)
- *   /settings                → Settings (placeholder)
+ *   /my-day                  → My Day
+ *   /reminders               → Reminders
+ *   /memories                → Memories
+ *   /settings                → Settings & Setup (Working Accessibility, Gemini AI, PWA)
  *   /games                   → Game Hub
  *   /games/memory-match      → Memory Match
  *   /games/daily-sequence    → Daily Sequence
@@ -47,11 +48,11 @@ export default function App() {
                   }
                 />
 
-                {/* ── Placeholder screens ─────────────────────────────────────── */}
+                {/* ── Patient screens ─────────────────────────────────────────── */}
                 <Route path="/my-day"    element={<MyDay />} />
                 <Route path="/reminders" element={<Reminders />} />
                 <Route path="/memories"  element={<Memories />} />
-                <Route path="/settings"  element={<Settings />} />
+                <Route path="/settings"  element={<SettingsScreen />} />
 
                 {/* ── Game Hub ─────────────────────────────────────────────────── */}
                 <Route path="/games" element={<GameHub />} />

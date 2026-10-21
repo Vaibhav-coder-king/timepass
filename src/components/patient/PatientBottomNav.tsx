@@ -3,6 +3,7 @@ import { Home, Gamepad2, MessageCircleHeart, BookImage, MoreHorizontal, type Luc
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
+import { useMira } from '../../context/MiraContext';
 
 type LucideIcon = React.FC<LucideProps>;
 
@@ -19,21 +20,22 @@ interface PatientBottomNavProps {
 }
 
 /**
- * Persistent patient bottom navigation: Home / Play / MIRA / Memories / More
+ * Persistent patient bottom navigation: Home / Play / MIRA / Memories / More (Settings)
  * 80px height, large icons + labels. Fully localised via LanguageContext.
  * Sliding active indicator via Framer Motion layoutId.
  */
 export function PatientBottomNav({ activeTab, onTabChange }: PatientBottomNavProps) {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { activate } = useMira();
 
   // Labels are computed from the dictionary so they update when language changes
   const NAV_ITEMS: NavItem[] = [
-    { id: 'home',     label: t('nav.home'),     Icon: Home,             ariaLabel: 'Go to Home' },
-    { id: 'play',     label: t('nav.play'),     Icon: Gamepad2,         ariaLabel: 'Go to Games' },
+    { id: 'home',     label: t('nav.home'),     Icon: Home,               ariaLabel: 'Go to Home' },
+    { id: 'play',     label: t('nav.play'),     Icon: Gamepad2,           ariaLabel: 'Go to Games' },
     { id: 'mira',     label: t('nav.mira'),     Icon: MessageCircleHeart, ariaLabel: 'Talk to MIRA' },
-    { id: 'memories', label: t('nav.memories'), Icon: BookImage,        ariaLabel: 'View Memories' },
-    { id: 'more',     label: t('nav.more'),     Icon: MoreHorizontal,   ariaLabel: 'More options' },
+    { id: 'memories', label: t('nav.memories'), Icon: BookImage,          ariaLabel: 'View Memories' },
+    { id: 'more',     label: t('nav.more'),     Icon: MoreHorizontal,     ariaLabel: 'Settings & More' },
   ];
 
   const handleTabPress = (id: string) => {
@@ -42,9 +44,7 @@ export function PatientBottomNav({ activeTab, onTabChange }: PatientBottomNavPro
       case 'play':     navigate('/games');    break;
       case 'memories': navigate('/memories'); break;
       case 'more':     navigate('/settings'); break;
-      case 'mira':
-        alert('MIRA Voice Assistant Activated');
-        break;
+      case 'mira':     activate();            break;
       default:
         onTabChange?.(id);
     }

@@ -1,5 +1,5 @@
 """
-COGNIVA Backend — Phase 3 & 4
+COGNIVA Backend — Phase 3 & 4 + MIRA AI Gemini Integration
 Flask REST API  •  SQLite (WAL mode)  •  Port 5000
 
 Run:  python app.py
@@ -7,20 +7,34 @@ Run:  python app.py
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
+import urllib.request
+import urllib.error
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
-# ── App setup ─────────────────────────────────────────────────────────────────
+# ── App setup (Merged Single HTTP Service) ────────────────────────────────────
 
-app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+DIST_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist"))
+
+app = Flask(__name__, static_folder=None)
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization,X-Username"
+    response.headers["Access-Control-Allow-Methods"] = "GET,PUT,POST,DELETE,OPTIONS"
+    return response
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "cogniva.db")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 
 # ── Database helpers ──────────────────────────────────────────────────────────
@@ -101,18 +115,11 @@ def login():
 # ── Auth Helper ───────────────────────────────────────────────────────────────
 
 def get_authenticated_user() -> dict | None:
-    """
-    Extracts authenticated user from Authorization header or X-Username header.
-    Format: 'Bearer token_<username>_<role>' or 'X-Username: <username>'
-    """
     auth_header = request.headers.get("Authorization", "")
     username = None
 
     if auth_header.startswith("Bearer token_"):
         raw_token = auth_header.replace("Bearer token_", "")
-        # The token is generated as token_{username}_{role}
-        # Since username might contain underscores (e.g. admin_hospital, ngo_worker),
-        # the role is the last token part.
         parts = raw_token.rsplit("_", 1)
         if parts:
             username = parts[0]
@@ -133,8 +140,6 @@ def get_authenticated_user() -> dict | None:
 
 
 # ── POST /api/sync ─────────────────────────────────────────────────────────────
-# Idempotent upserts — safe to retry on network failure.
-# Returns exactly which IDs were acknowledged.
 
 @app.route("/api/sync", methods=["POST"])
 def sync():
@@ -172,7 +177,7 @@ def sync():
                 )
                 acknowledged_ids.append(sid)
             except Exception:
-                pass  # Skip malformed entries — never fail the whole batch
+                pass
 
         conn.commit()
 
@@ -186,12 +191,6 @@ def sync():
 
 
 # ── GET /api/analytics ────────────────────────────────────────────────────────
-# Returns moving averages (window=3, last 10 sessions) and attention_needed flag.
-# Enforces role-based data scoping:
-# - Hospital: sees all records across all devices/regions
-# - NGO: sees records in their assigned region
-# - Family: sees records matching their device_id
-# - User: 403 Forbidden (patients do not access caregiver analytics)
 
 def moving_avg(values: list[float], window: int = 3) -> list[float]:
     result = []
@@ -202,13 +201,23 @@ def moving_avg(values: list[float], window: int = 3) -> list[float]:
     return result
 
 
+def format_label(synced_at: str) -> str:
+    if not synced_at:
+        return "Session"
+    try:
+        # e.g. "2026-10-21T18:30:00" -> "21 Oct 18:30"
+        date_part = synced_at[5:10]  # MM-DD
+        time_part = synced_at[11:16] if len(synced_at) >= 16 else ""
+        return f"{date_part} {time_part}".strip()
+    except Exception:
+        return synced_at[:10]
+
+
 def build_game_stats(sessions: list[dict]) -> dict:
-    """Build chart-ready data for a single game type."""
-    # sessions come in newest-first; reverse for chronological chart display
     ordered = list(reversed(sessions[:10]))
     times  = [s["time_taken_sec"] for s in ordered]
     errors = [s["error_count"]    for s in ordered]
-    labels = [s["synced_at"][:10] for s in ordered]
+    labels = [format_label(s.get("synced_at", "")) for s in ordered]
     return {
         "labels":           labels,
         "raw_time":         times,
@@ -228,7 +237,6 @@ EMPTY_GAME_STATS = {
 def analytics():
     user = get_authenticated_user()
 
-    # Enforce RBAC
     if not user:
         return jsonify({"error": "Authentication required"}), 401
 
@@ -241,14 +249,11 @@ def analytics():
     params = []
 
     if role == "Hospital":
-        # Global view
         pass
     elif role == "NGO":
-        # Regionally scoped
         query += " WHERE region = ?"
         params.append(user.get("region", "Assam"))
     elif role == "Family":
-        # Device scoped
         query += " WHERE device_id = ?"
         params.append(user.get("device_id", "device_alpha"))
     else:
@@ -273,13 +278,11 @@ def analytics():
 
     dicts = [dict(r) for r in rows]
 
-    # ── Attention flag: most recent 3 sessions (any game) all have error_count > 4
     recent_3 = dicts[:3]
     attention_needed = len(recent_3) == 3 and all(
         r["error_count"] > 4 for r in recent_3
     )
 
-    # ── Group by game type
     by_game: dict[str, list[dict]] = defaultdict(list)
     for row in dicts:
         by_game[row["game_type"]].append(row)
@@ -298,15 +301,116 @@ def analytics():
     )
 
 
+# ── POST /api/mira/chat — Gemini AI Dementia Voice & Memory Companion ────────
+
+@app.route("/api/mira/chat", methods=["POST"])
+def mira_chat():
+    data = request.get_json(silent=True) or {}
+    message = data.get("message", "").strip()
+    language = data.get("language", "en")
+    patient_name = data.get("patient_name", "Arun")
+    api_key = data.get("api_key", "").strip() or GEMINI_API_KEY or os.environ.get("VITE_GEMINI_API_KEY", "")
+
+    if not message:
+        return jsonify({"response": f"Namaste {patient_name}, I am MIRA. How can I brighten your day?", "source": "offline_engine"})
+
+    # Check if Gemini API is available
+    if api_key:
+        try:
+            model = data.get("model", "gemini-1.5-flash")
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            
+            system_instruction = (
+                f"You are MIRA, a warm, loving, and patient AI memory companion on COGNIVA, "
+                f"a platform for elderly dementia patients in North-East India (NER). "
+                f"Patient name: {patient_name}. Preferred language: {language}. "
+                f"Assist with orientation, encourage cognitive games like Memory Match (with Assam tea ☕ and rhino 🦏 cards) "
+                f"and Daily Sequence routines. Comfort them with peaceful NER memories. "
+                f"CRITICAL: Keep your response SHORT (1 to 3 short sentences, max 40 words). Never overwhelm the elder."
+            )
+
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": f"{system_instruction}\n\nPatient says: '{message}'\nMIRA reply:"}]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.6,
+                    "maxOutputTokens": 100
+                }
+            }
+
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                res_data = json.loads(resp.read().decode("utf-8"))
+                text = res_data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
+                if text:
+                    return jsonify({"response": text, "source": "gemini"})
+        except Exception:
+            pass  # Fall back to offline dementia engine
+
+    # Offline fallback response
+    msg_lower = message.lower()
+    if "game" in msg_lower or "play" in msg_lower or "match" in msg_lower:
+        reply = f"Hello {patient_name}! Let's play Memory Match together. Matching the Kaziranga rhino 🦏 and Assam tea ☕ cards is wonderful for the mind."
+    elif "medicine" in msg_lower or "remind" in msg_lower:
+        reply = f"{patient_name}, your medicine reminder is at 12:30 PM. Please take a sip of water now and rest comfortably."
+    elif "where" in msg_lower or "lost" in msg_lower or "scared" in msg_lower or "help" in msg_lower:
+        reply = f"You are safe and warm at home, {patient_name}. I am Mira, right beside you. Everything is calm and peaceful."
+    elif "tea" in msg_lower or "assam" in msg_lower or "bihu" in msg_lower:
+        reply = f"The fresh morning breeze over Assam tea gardens always brings peace, {patient_name}. Would you like a warm cup?"
+    else:
+        reply = f"Namaste {patient_name}! Today is a lovely day to engage your mind. Would you like to play a quick memory game?"
+
+    return jsonify({"response": reply, "source": "offline_engine"})
+
+
 # ── Health check ──────────────────────────────────────────────────────────────
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "db": DB_PATH})
+    return jsonify({"status": "ok", "db": DB_PATH, "gemini_configured": bool(GEMINI_API_KEY)})
+
+
+# ── Static SPA Routing (Merged Single HTTP Service) ───────────────────────────
+
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_spa(path: str):
+    # Pass through unhandled /api calls so they 404 cleanly
+    if path.startswith("api/") or path == "api":
+        return jsonify({"error": "API route not found"}), 404
+
+    # Serve static file if it exists in dist/ (e.g. assets, manifest, icons, sw.js)
+    file_path = os.path.join(DIST_DIR, path)
+    if path and os.path.isfile(file_path):
+        return send_from_directory(DIST_DIR, path)
+
+    # Otherwise serve index.html for client-side React Router (e.g. /games, /caregiver)
+    index_file = os.path.join(DIST_DIR, "index.html")
+    if os.path.isfile(index_file):
+        return send_from_directory(DIST_DIR, "index.html")
+
+    return (
+        "<h3>COGNIVA Frontend not built yet.</h3><p>Please run <code>npm run build</code> first.</p>",
+        200,
+        {"Content-Type": "text/html"},
+    )
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("COGNIVA API running on http://0.0.0.0:5000")
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    init_db()
+    print("=" * 60, flush=True)
+    print("  COGNIVA Unified App running on http://127.0.0.1:5000", flush=True)
+    print("  Single HTTP Service: Frontend + Backend + MIRA API", flush=True)
+    print("  Open in browser: http://localhost:5000", flush=True)
+    print("=" * 60, flush=True)
+    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)

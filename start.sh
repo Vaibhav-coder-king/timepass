@@ -3,6 +3,7 @@
 echo ""
 echo "========================================="
 echo "  COGNIVA - Cognitive Gaming Platform"
+echo "  Single Merged HTTP Service (Port 5000)"
 echo "========================================="
 echo ""
 
@@ -35,38 +36,22 @@ fi
 echo "[INFO] Ensuring backend dependencies are installed..."
 $PYTHON_CMD -m pip install flask flask-cors --quiet
 
-# ── Start Flask backend ─────────────────────────────────────────────────────
-echo "[INFO] Starting Flask backend on http://localhost:5000 ..."
-$PYTHON_CMD backend/app.py &
-BACKEND_PID=$!
-
-# ── Small delay so backend starts first ─────────────────────────────────────
-sleep 2
-
-# ── Start Vite frontend ─────────────────────────────────────────────────────
-echo "[INFO] Starting React frontend on http://localhost:5173 ..."
-npm run dev &
-FRONTEND_PID=$!
-
-# ── Open browser ────────────────────────────────────────────────────────────
-sleep 3
-if command -v open &> /dev/null; then
-    open http://localhost:5173        # macOS
-elif command -v xdg-open &> /dev/null; then
-    xdg-open http://localhost:5173    # Linux
+# ── Build frontend if dist is missing ───────────────────────────────────────
+if [ ! -d "dist" ]; then
+    echo "[INFO] Building frontend for single HTTP service..."
+    npm run build
 fi
 
+# ── Open browser ────────────────────────────────────────────────────────────
+(sleep 2 && (open http://localhost:5000 2>/dev/null || xdg-open http://localhost:5000 2>/dev/null)) &
+
 echo ""
 echo "========================================="
-echo "  Both servers are running!"
+echo "  Single Merged HTTP Server Running!"
 echo ""
-echo "  Frontend : http://localhost:5173"
-echo "  Backend  : http://localhost:5000"
-echo ""
-echo "  Press Ctrl+C to stop everything."
+echo "  Unified App : http://localhost:5000"
+echo "  Mobile / LAN: http://<LAN-IP>:5000"
 echo "========================================="
 echo ""
 
-# ── Wait and clean up on Ctrl+C ────────────────────────────────────────────
-trap "echo ''; echo 'Stopping servers...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit 0" SIGINT SIGTERM
-wait
+$PYTHON_CMD -u backend/app.py

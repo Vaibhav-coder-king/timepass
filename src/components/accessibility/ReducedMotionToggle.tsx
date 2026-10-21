@@ -24,7 +24,7 @@ export function ReducedMotionToggle({ className }: ReducedMotionToggleProps) {
         aria-label="Reduce motion and animations"
         onClick={() => setReducedMotion(!isReduced)}
         className={clsx(
-          'w-full flex items-center justify-between gap-4 rounded-2xl border-2 p-5 transition-all duration-200 min-h-[80px]',
+          'w-full flex items-center justify-between gap-4 rounded-2xl border-2 p-5 transition-all duration-200 min-h-[72px]',
           'border-[rgba(var(--color-text-primary),0.15)] bg-[rgb(var(--color-surface-card))]',
           'text-[rgb(var(--color-text-primary))]',
           'hover:border-[rgb(var(--color-primary))]'
@@ -32,9 +32,9 @@ export function ReducedMotionToggle({ className }: ReducedMotionToggleProps) {
       >
         <div className="flex items-center gap-4">
           {isReduced ? (
-            <Leaf className="w-8 h-8 flex-shrink-0 text-[rgb(var(--color-success))]" aria-hidden="true" />
+            <Leaf className="w-7 h-7 flex-shrink-0 text-[rgb(var(--color-success))]" aria-hidden="true" />
           ) : (
-            <Wind className="w-8 h-8 flex-shrink-0 text-[rgb(var(--color-primary))]" aria-hidden="true" />
+            <Wind className="w-7 h-7 flex-shrink-0 text-[rgb(var(--color-primary))]" aria-hidden="true" />
           )}
           <div className="text-left">
             <span
@@ -54,11 +54,11 @@ export function ReducedMotionToggle({ className }: ReducedMotionToggleProps) {
           </div>
         </div>
 
-        {/* Toggle pill */}
+        {/* Compact Toggle pill */}
         <div
           aria-hidden="true"
           className={clsx(
-            'relative flex-shrink-0 w-14 h-8 rounded-full transition-colors duration-300',
+            'relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-300',
             isReduced
               ? 'bg-[rgb(var(--color-success))]'
               : 'bg-[rgb(var(--color-primary))]'
@@ -66,8 +66,8 @@ export function ReducedMotionToggle({ className }: ReducedMotionToggleProps) {
         >
           <div
             className={clsx(
-              'absolute top-1 w-6 h-6 rounded-full bg-white transition-transform duration-300',
-              isReduced ? 'translate-x-7' : 'translate-x-1'
+              'absolute top-1 w-4 h-4 rounded-full bg-white transition-transform duration-300',
+              isReduced ? 'translate-x-6' : 'translate-x-1'
             )}
           />
         </div>

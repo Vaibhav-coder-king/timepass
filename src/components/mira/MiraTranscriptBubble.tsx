@@ -13,12 +13,14 @@ interface MiraTranscriptBubbleProps {
  */
 export function MiraTranscriptBubble({ text, speaker, state }: MiraTranscriptBubbleProps) {
   const isUser = speaker === 'user';
+  const isThinking = !isUser && state === 'processing';
+  const hasContent = Boolean(text && text.trim().length > 0) || isThinking;
 
   return (
     <AnimatePresence>
-      {text && (
+      {hasContent && (
         <motion.div
-          key={`${speaker}-${text}`}
+          key={`${speaker}-${text || 'thinking'}`}
           initial={{ opacity: 0, y: 10, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -6, scale: 0.97 }}
@@ -28,17 +30,19 @@ export function MiraTranscriptBubble({ text, speaker, state }: MiraTranscriptBub
           {/* MIRA avatar indicator */}
           {!isUser && (
             <div
-              className="flex-shrink-0 w-8 h-8 rounded-full mr-2 mt-1"
+              className="flex-shrink-0 w-8 h-8 rounded-full mr-2 mt-1 flex items-center justify-center text-xs font-bold text-white shadow-sm"
               style={{
                 background:
                   'radial-gradient(circle, rgb(167,139,250), rgb(91,53,234))',
               }}
               aria-hidden="true"
-            />
+            >
+              M
+            </div>
           )}
 
           <div
-            className="max-w-[80%] px-5 py-4 rounded-3xl"
+            className="max-w-[85%] px-5 py-4 rounded-3xl"
             style={{
               background: isUser
                 ? 'rgb(var(--color-primary))'
@@ -55,8 +59,9 @@ export function MiraTranscriptBubble({ text, speaker, state }: MiraTranscriptBub
             }}
           >
             {/* Thinking dots when processing */}
-            {!isUser && state === 'processing' && !text ? (
-              <div className="flex gap-1.5 py-1" aria-label="MIRA is thinking">
+            {isThinking && (!text || text.trim().length === 0) ? (
+              <div className="flex items-center gap-2 py-1.5 px-1" aria-label="MIRA is thinking">
+                <span className="text-xs font-medium text-[rgb(var(--color-text-secondary))] mr-1">MIRA is thinking</span>
                 {[0, 1, 2].map(i => (
                   <motion.div
                     key={i}
@@ -71,7 +76,7 @@ export function MiraTranscriptBubble({ text, speaker, state }: MiraTranscriptBub
                 ))}
               </div>
             ) : (
-              <p>{text}</p>
+              <p className="whitespace-pre-wrap">{text}</p>
             )}
           </div>
         </motion.div>

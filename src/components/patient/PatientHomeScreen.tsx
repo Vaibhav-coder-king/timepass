@@ -5,16 +5,8 @@ import type { PatientActionType, PatientProfile } from '../../types/types';
 import { GreetingHeader } from './GreetingHeader';
 import { ActionCardGrid } from './ActionCardGrid';
 import { useMira } from '../../context/MiraContext';
+import { getPatientProfile } from '../../services/geminiService';
 import { AccessibilityPanel } from '../accessibility/AccessibilityPanel';
-
-// ─── Demo patient data ────────────────────────────────────────────────────────
-
-const DEMO_PATIENT: PatientProfile = {
-  id: 'pat_8f2a1c',
-  displayName: 'Arun',
-  preferredLanguage: 'en',
-  avatarUrl: undefined,
-};
 
 const ACTION_ROUTES: Partial<Record<PatientActionType, string>> = {
   play:       '/games',
@@ -26,11 +18,11 @@ const ACTION_ROUTES: Partial<Record<PatientActionType, string>> = {
 /**
  * Top-level Patient Home Screen.
  * Shows time-aware greeting + 5 large action cards.
- * "Good Morning, Arun" — the most important screen in the app.
+ * "Good Morning, Arun" — the central home screen for elderly dementia patients.
  */
 export function PatientHomeScreen() {
   const [patient, setPatient] = useState<PatientProfile | null>(null);
-  const [isA11yOpen, setIsA11yOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { activate } = useMira();
   const navigate = useNavigate();
 
@@ -44,18 +36,19 @@ export function PatientHomeScreen() {
     if (lockPressRef.current) clearTimeout(lockPressRef.current);
   };
 
-  // Simulate patient loading (replace with real API call in future phases)
+  // Load configured patient profile
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setPatient(DEMO_PATIENT);
-    }, 300);
-    return () => clearTimeout(timer);
+    const profile = getPatientProfile();
+    setPatient({
+      id: 'pat_cogniva_user',
+      displayName: profile.name || 'Arun',
+      preferredLanguage: 'en',
+    });
   }, []);
 
   const handleCardSelect = (action: PatientActionType) => {
     if (action === 'talk_to_mira') {
       activate();
-      alert('MIRA Voice Assistant Activated');
       return;
     }
     const route = ACTION_ROUTES[action];
@@ -84,8 +77,9 @@ export function PatientHomeScreen() {
           </button>
 
           <button
-            onClick={() => setIsA11yOpen(true)}
-            aria-label="Open accessibility settings"
+            onClick={() => setIsSettingsOpen(true)}
+            aria-label="Open settings"
+            title="Settings"
             className="flex items-center justify-center rounded-2xl w-14 h-14 transition-all active:scale-95 active:opacity-80"
             style={{
               background: 'rgba(var(--color-surface-card), 0.8)',
@@ -123,8 +117,11 @@ export function PatientHomeScreen() {
         />
       </div>
 
-      {/* Accessibility Panel */}
-      <AccessibilityPanel isOpen={isA11yOpen} onClose={() => setIsA11yOpen(false)} />
+      {/* Accessibility / Settings slide-in panel */}
+      <AccessibilityPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </>
   );
 }
