@@ -33,7 +33,18 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Methods"] = "GET,PUT,POST,DELETE,OPTIONS"
     return response
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "cogniva.db")
+if os.environ.get("VERCEL"):
+    DB_PATH = "/tmp/cogniva.db"
+    SEED_DB = os.path.join(os.path.dirname(__file__), "cogniva.db")
+    if not os.path.exists(DB_PATH) and os.path.exists(SEED_DB):
+        import shutil
+        try:
+            shutil.copyfile(SEED_DB, DB_PATH)
+        except Exception as e:
+            print("Failed to copy seed db to /tmp:", e)
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), "cogniva.db")
+
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 
@@ -47,7 +58,10 @@ def get_db() -> sqlite3.Connection:
 
 def init_db() -> None:
     with get_db() as conn:
-        conn.execute("PRAGMA journal_mode=WAL;")
+        if os.environ.get("VERCEL"):
+            conn.execute("PRAGMA journal_mode=DELETE;")
+        else:
+            conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,6 +85,15 @@ def init_db() -> None:
                 region       TEXT    DEFAULT 'Assam'
             )
         """)
+        conn.executemany("""
+            INSERT OR IGNORE INTO users (id, username, password_hash, role, device_id, region, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, [
+            (1, "admin_hospital", "hosp123", "Hospital", None, None, "2026-01-01T00:00:00Z"),
+            (2, "ngo_worker", "ngo123", "NGO", None, "Assam", "2026-01-01T00:00:00Z"),
+            (3, "family_carer", "fam123", "Family", "device_alpha", "Assam", "2026-01-01T00:00:00Z"),
+            (4, "elderly_user", "user123", "User", "device_alpha", "Assam", "2026-01-01T00:00:00Z"),
+        ])
         conn.commit()
 
 
@@ -80,6 +103,7 @@ init_db()
 # ── POST /api/login ────────────────────────────────────────────────────────────
 
 @app.route("/api/login", methods=["POST"])
+@app.route("/login", methods=["POST"])
 def login():
     data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()
@@ -142,6 +166,7 @@ def get_authenticated_user() -> dict | None:
 # ── POST /api/sync ─────────────────────────────────────────────────────────────
 
 @app.route("/api/sync", methods=["POST"])
+@app.route("/sync", methods=["POST"])
 def sync():
     data = request.get_json(silent=True)
     if not data or not isinstance(data, list):
@@ -234,6 +259,7 @@ EMPTY_GAME_STATS = {
 
 
 @app.route("/api/analytics", methods=["GET"])
+@app.route("/analytics", methods=["GET"])
 def analytics():
     user = get_authenticated_user()
 
@@ -304,6 +330,7 @@ def analytics():
 # ── POST /api/mira/chat — Gemini AI Dementia Voice & Memory Companion ────────
 
 @app.route("/api/mira/chat", methods=["POST"])
+@app.route("/mira/chat", methods=["POST"])
 def mira_chat():
     data = request.get_json(silent=True) or {}
     message = data.get("message", "").strip()
@@ -374,6 +401,7 @@ def mira_chat():
 # ── Health check ──────────────────────────────────────────────────────────────
 
 @app.route("/api/health", methods=["GET"])
+@app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "db": DB_PATH, "gemini_configured": bool(GEMINI_API_KEY)})
 

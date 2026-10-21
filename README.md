@@ -5,6 +5,26 @@
 
 ---
 
+## ⚡ One-Click Vercel Deployment
+
+COGNIVA is configured for instant deployment to **Vercel** with both frontend and serverless Python backend:
+
+1. Push your repository to GitHub.
+2. Go to **[vercel.com](https://vercel.com)** and click **"Add New Project"**.
+3. Import your repository (`Vaibhav-coder-king/timepass`).
+4. Vercel automatically detects the configuration from `vercel.json`:
+   - **Framework Preset**: `Vite`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+   - **Serverless API**: `api/index.py` (Flask backend)
+5. *(Optional)* Add Environment Variable:
+   - `VITE_GEMINI_API_KEY`: your Gemini API key (can also be entered in-app)
+6. Click **Deploy**!
+
+Both your PWA frontend and `/api/*` serverless backend endpoints will be live on your Vercel URL with zero configuration.
+
+---
+
 ## 🚀 Merged Single HTTP Service Architecture
 
 The frontend (React PWA) and backend (Flask API + SQLite + MIRA AI) are now merged into a **single unified HTTP service** running on port **5000**:
