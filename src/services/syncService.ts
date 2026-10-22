@@ -102,6 +102,14 @@ export interface AnalyticsData {
   DAILY_SEQUENCE: GameStats;
 }
 
+const EMPTY_GAME_STATS: GameStats = {
+  labels: [],
+  raw_time: [],
+  raw_errors: [],
+  moving_avg_time: [],
+  moving_avg_errors: [],
+};
+
 function computeMovingAvg(values: number[], windowSize: number = 3): number[] {
   return values.map((_, i) => {
     const start = Math.max(0, i - windowSize + 1);
@@ -127,13 +135,7 @@ export function computeLocalAnalytics(): AnalyticsData {
   // If user has played actual sessions, format them
   const buildStats = (sessions: GameSession[]): GameStats => {
     if (sessions.length === 0) {
-      return {
-        labels: [],
-        raw_time: [],
-        raw_errors: [],
-        moving_avg_time: [],
-        moving_avg_errors: [],
-      };
+      return EMPTY_GAME_STATS;
     }
 
     const labels = sessions.map(s => formatSessionLabel(s.id));
@@ -151,36 +153,6 @@ export function computeLocalAnalytics(): AnalyticsData {
 
   const mmStats = buildStats(mmSessions);
   const dsStats = buildStats(dsSessions);
-
-  // Fallback seed reference if patient hasn't played games yet on this browser
-  if (mmStats.labels.length === 0 && dsStats.labels.length === 0) {
-    const baseDate = new Date();
-    const mockLabels = [
-      formatSessionLabel(baseDate.getTime() - 4 * 86400000),
-      formatSessionLabel(baseDate.getTime() - 3 * 86400000),
-      formatSessionLabel(baseDate.getTime() - 2 * 86400000),
-      formatSessionLabel(baseDate.getTime() - 1 * 86400000),
-      formatSessionLabel(baseDate.getTime() - 1800000),
-    ];
-
-    return {
-      attention_needed: false,
-      MEMORY_MATCH: {
-        labels: mockLabels,
-        raw_time: [44, 39, 36, 32, 28],
-        raw_errors: [4, 3, 2, 2, 1],
-        moving_avg_time: [44, 41.5, 39.7, 35.7, 32],
-        moving_avg_errors: [4, 3.5, 3.0, 2.3, 1.7],
-      },
-      DAILY_SEQUENCE: {
-        labels: mockLabels,
-        raw_time: [35, 31, 28, 25, 21],
-        raw_errors: [3, 2, 2, 1, 1],
-        moving_avg_time: [35, 33, 31.3, 28, 24.7],
-        moving_avg_errors: [3, 2.5, 2.3, 1.7, 1.3],
-      },
-    };
-  }
 
   // Check if attention needed (increasing error rates)
   const recentErrors = mmStats.raw_errors.slice(-3);
@@ -221,13 +193,7 @@ export async function fetchAnalytics(): Promise<AnalyticsData> {
 
     if (response.ok) {
       const remoteData = (await response.json()) as AnalyticsData;
-      // If remote has valid sessions, return remote data
-      if (
-        (remoteData.MEMORY_MATCH?.labels?.length || 0) > 0 ||
-        (remoteData.DAILY_SEQUENCE?.labels?.length || 0) > 0
-      ) {
-        return remoteData;
-      }
+      return remoteData;
     }
   } catch {
     // Backend unreachable — fallback seamlessly to local computation

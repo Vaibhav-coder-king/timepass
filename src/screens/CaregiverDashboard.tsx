@@ -20,7 +20,6 @@ import {
   LogOut,
   Calendar,
   Clock,
-  TrendingUp,
 } from 'lucide-react';
 import { type AnalyticsData, fetchAnalytics } from '../services/syncService';
 import { useAuth } from '../context/AuthContext';
@@ -69,24 +68,6 @@ function CognivaTooltip({ active, payload, label }: {
   );
 }
 
-// ─── Fallback Sample Data for Visual Graph Preview ────────────────────────────
-
-const SAMPLE_MEMORY_MATCH = {
-  labels: ['18 Oct 10:15', '19 Oct 11:30', '20 Oct 15:45', '21 Oct 09:20', '21 Oct 16:10'],
-  raw_time: [42, 38, 35, 32, 29],
-  moving_avg_time: [42, 40, 38.3, 35, 32],
-  raw_errors: [4, 3, 3, 2, 1],
-  moving_avg_errors: [4, 3.5, 3.3, 2.7, 2],
-};
-
-const SAMPLE_DAILY_SEQUENCE = {
-  labels: ['18 Oct 10:25', '19 Oct 11:40', '20 Oct 15:55', '21 Oct 09:30', '21 Oct 16:20'],
-  raw_time: [35, 30, 28, 25, 22],
-  moving_avg_time: [35, 32.5, 31, 27.6, 25],
-  raw_errors: [3, 2, 2, 1, 1],
-  moving_avg_errors: [3, 2.5, 2.3, 1.7, 1.3],
-};
-
 // ─── CaregiverDashboard ───────────────────────────────────────────────────────
 
 export function CaregiverDashboard() {
@@ -96,7 +77,6 @@ export function CaregiverDashboard() {
   const [data,      setData]      = useState<AnalyticsData | null>(null);
   const [lastFetch, setLastFetch] = useState<string>('');
   const [currentDateTime, setCurrentDateTime] = useState<string>('');
-  const [useSampleDataIfEmpty, setUseSampleDataIfEmpty] = useState<boolean>(true);
 
   // Live clock
   useEffect(() => {
@@ -141,12 +121,12 @@ export function CaregiverDashboard() {
 
   useEffect(() => { load(); }, []);
 
-  // Determine active dataset (real or reference sample)
+  // Render only recorded sessions; an empty dataset stays empty.
   const hasRealMMData = (data?.MEMORY_MATCH?.labels?.length ?? 0) > 0;
   const hasRealDSData = (data?.DAILY_SEQUENCE?.labels?.length ?? 0) > 0;
 
-  const mmSource = hasRealMMData ? data!.MEMORY_MATCH : (useSampleDataIfEmpty ? SAMPLE_MEMORY_MATCH : null);
-  const dsSource = hasRealDSData ? data!.DAILY_SEQUENCE : (useSampleDataIfEmpty ? SAMPLE_DAILY_SEQUENCE : null);
+  const mmSource = data?.MEMORY_MATCH;
+  const dsSource = data?.DAILY_SEQUENCE;
 
   const mmTimeData = mmSource
     ? toChartData(mmSource.labels, mmSource.raw_time, mmSource.moving_avg_time, 'Raw', 'Avg (3-session)')
@@ -308,7 +288,7 @@ export function CaregiverDashboard() {
           </div>
         )}
 
-        {/* Error / Offline with option to view reference graph */}
+        {/* Error / Offline */}
         {(loadState === 'error' || loadState === 'offline') && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -333,8 +313,8 @@ export function CaregiverDashboard() {
               style={{ fontSize: 'var(--text-base)' }}
             >
               {loadState === 'offline'
-                ? 'Showing cached reference trajectory. Connect to backend to sync latest sessions.'
-                : 'Showing standard clinical trajectory. Backend will sync automatically.'}
+                ? 'The backend is unavailable. Reconnect to refresh patient sessions.'
+                : 'The backend could not be reached. Try again to refresh patient sessions.'}
             </p>
             <button
               onClick={load}
@@ -346,9 +326,9 @@ export function CaregiverDashboard() {
           </motion.div>
         )}
 
-        {/* Success or preview graphs */}
+        {/* Recorded analytics */}
         <AnimatePresence>
-          {((loadState === 'success' && data) || (loadState !== 'loading' && useSampleDataIfEmpty)) && (
+          {loadState === 'success' && data && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -384,21 +364,11 @@ export function CaregiverDashboard() {
                 </motion.div>
               )}
 
-              {/* Sample baseline indicator badge if displaying reference data */}
               {!hasRealMMData && !hasRealDSData && (
-                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-amber-600" />
-                    <span className="text-xs font-semibold">
-                      Displaying Reference Cognitive Graph (Play games to record live patient telemetry)
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setUseSampleDataIfEmpty(!useSampleDataIfEmpty)}
-                    className="text-xs font-bold underline px-2"
-                  >
-                    {useSampleDataIfEmpty ? 'Hide Reference' : 'Show Reference'}
-                  </button>
+                <div className="rounded-3xl p-5 text-center text-[rgb(var(--color-text-secondary))]"
+                  style={{ background: 'rgb(var(--color-surface-card))', boxShadow: 'var(--shadow-card)' }}
+                >
+                  No game sessions are recorded yet.
                 </div>
               )}
 
@@ -406,16 +376,14 @@ export function CaregiverDashboard() {
               <SummaryCard
                 title="Memory Match"
                 emoji="🧩"
-                sessions={hasRealMMData ? data!.MEMORY_MATCH : SAMPLE_MEMORY_MATCH}
-                isSample={!hasRealMMData}
+                sessions={data.MEMORY_MATCH}
                 color="rgb(124,92,252)"
               />
 
               <SummaryCard
                 title="Daily Sequence"
                 emoji="🌅"
-                sessions={hasRealDSData ? data!.DAILY_SEQUENCE : SAMPLE_DAILY_SEQUENCE}
-                isSample={!hasRealDSData}
+                sessions={data.DAILY_SEQUENCE}
                 color="rgb(249,115,22)"
               />
 
@@ -518,11 +486,10 @@ interface SummaryCardProps {
     raw_time: number[];
     raw_errors: number[];
   };
-  isSample?: boolean;
   color: string;
 }
 
-function SummaryCard({ title, emoji, sessions, isSample, color }: SummaryCardProps) {
+function SummaryCard({ title, emoji, sessions, color }: SummaryCardProps) {
   const totalSessions = sessions.labels.length;
   const avgTime = totalSessions > 0
     ? Math.round(sessions.raw_time.reduce((a, b) => a + b, 0) / totalSessions) : 0;
@@ -548,15 +515,10 @@ function SummaryCard({ title, emoji, sessions, isSample, color }: SummaryCardPro
               {title}
             </h2>
             <p className="text-[rgb(var(--color-text-secondary))]" style={{ fontSize: 'var(--text-sm)' }}>
-              {totalSessions} session{totalSessions !== 1 ? 's' : ''} recorded {isSample ? '(Reference)' : ''}
+              {totalSessions} session{totalSessions !== 1 ? 's' : ''} recorded
             </p>
           </div>
         </div>
-        {isSample && (
-          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-lg bg-indigo-500/10 text-indigo-600">
-            Baseline
-          </span>
-        )}
       </div>
 
       <div className="flex gap-3">
