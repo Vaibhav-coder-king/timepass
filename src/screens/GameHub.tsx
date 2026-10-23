@@ -8,7 +8,7 @@ import { useState } from 'react';
 // ─── Game card data ───────────────────────────────────────────────────────────
 
 interface GameCardData {
-  id: 'memory-match' | 'daily-sequence';
+  id: string;
   route: string;
   emoji: string;
   title: string;
@@ -46,6 +46,84 @@ const GAME_CARDS: GameCardData[] = [
     iconBg: 'rgb(249,115,22)',
     difficulty: 'Easy — 3 steps',
     duration: 'About 2 minutes',
+  },
+  {
+    id: 'clock-draw',
+    route: '/games/clock-draw',
+    emoji: '🕐',
+    title: 'Clock Draw',
+    subtitle: 'Draw what you see',
+    description:
+      'Draw a clock face — a gentle exercise for visual memory and spatial thinking.',
+    gradient: { from: 'rgb(220,242,255)', to: 'rgb(196,232,255)' },
+    iconBg: 'rgb(14,165,233)',
+    difficulty: 'Medium — hand-drawn',
+    duration: 'About 3 minutes',
+  },
+  {
+    id: 'audio-stroop',
+    route: '/games/audio-stroop',
+    emoji: '🎧',
+    title: 'Listen & Tap',
+    subtitle: 'Match what you hear',
+    description:
+      'Listen to a word and tap the right colour — tests attention across Assamese, Hindi, and English.',
+    gradient: { from: 'rgb(220,255,231)', to: 'rgb(196,255,215)' },
+    iconBg: 'rgb(34,197,94)',
+    difficulty: 'Medium — audio',
+    duration: 'About 4 minutes',
+  },
+  {
+    id: 'reality-anchor',
+    route: '/games/reality-anchor',
+    emoji: '🗓️',
+    title: "Today's World",
+    subtitle: 'Stay oriented',
+    description:
+      "Gentle questions about today's date, season, and place — supporting orientation and awareness.",
+    gradient: { from: 'rgb(255,246,220)', to: 'rgb(255,237,196)' },
+    iconBg: 'rgb(234,179,8)',
+    difficulty: 'Easy — no wrong answers',
+    duration: 'About 2 minutes',
+  },
+  {
+    id: 'acoustic-recognition',
+    route: '/games/acoustic-recognition',
+    emoji: '🔊',
+    title: 'Sounds Around',
+    subtitle: 'Name that sound',
+    description:
+      'Listen to everyday sounds — temple bell, rain, flute — and identify them.',
+    gradient: { from: 'rgb(255,228,240)', to: 'rgb(255,208,228)' },
+    iconBg: 'rgb(236,72,153)',
+    difficulty: 'Easy — sound clips',
+    duration: 'About 3 minutes',
+  },
+  {
+    id: 'tremor-telemetry',
+    route: '/games/tremor-telemetry',
+    emoji: '📱',
+    title: 'Steady Hand',
+    subtitle: 'Hold still for 5 seconds',
+    description:
+      'Rest your phone on a flat surface while holding it — a gentle way to track hand steadiness over time.',
+    gradient: { from: 'rgb(237,233,254)', to: 'rgb(221,214,254)' },
+    iconBg: 'rgb(139,92,246)',
+    difficulty: 'Easy — sensor based',
+    duration: 'About 1 minute',
+  },
+  {
+    id: 'pattern-match',
+    route: '/games/pattern-match',
+    emoji: '🦚',
+    title: 'Pattern Match',
+    subtitle: 'Find the pair',
+    description:
+      'Match beautiful patterns inspired by Assamese silk, Bihu icons, and Kaziranga wildlife.',
+    gradient: { from: 'rgb(240,253,244)', to: 'rgb(220,252,231)' },
+    iconBg: 'rgb(16,185,129)',
+    difficulty: 'Easy — tap to match',
+    duration: 'About 3 minutes',
   },
 ];
 
@@ -98,11 +176,25 @@ export function GameHub() {
 
       {/* Game cards */}
       <main className="flex-1 px-5 pt-4 pb-10 space-y-5">
+        {/* Badge */}
+        <div className="flex items-center gap-2 mb-1">
+          <span
+            className="inline-flex items-center px-3 py-1 rounded-full font-bold"
+            style={{
+              background: 'rgba(var(--color-primary), 0.12)',
+              color: 'rgb(var(--color-primary))',
+              fontSize: 'var(--text-xs)',
+            }}
+          >
+            🎮 6 Brain Games
+          </span>
+        </div>
+
         <p
           className="font-medium text-[rgb(var(--color-text-secondary))] mb-2"
           style={{ fontSize: 'var(--text-base)' }}
         >
-          Both games keep your mind active and gently improve memory.
+          Play any game to gently exercise different areas of your mind.
         </p>
 
         {GAME_CARDS.map((card, index) => (

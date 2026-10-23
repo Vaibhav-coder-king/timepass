@@ -1,165 +1,118 @@
-# 🧠 COGNIVA — Cognitive Gaming & Memory Assistance Platform
+# COGNIVA: AI-Based Cognitive Gaming & Memory Assistance Platform
 
-> **A HealthTech application for elderly patients with memory decline and dementia in North East India (NER).**  
-> Designed as a friendly, calming digital companion with voice support, regional North-East cultural themes, offline-first clinical sync, and comprehensive caregiver insights.
+[![PWA Ready](https://img.shields.io/badge/PWA-Offline--First-success.svg)](https://vitejs.dev/)
+[![React 18](https://img.shields.io/badge/React-18.3-blue.svg)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)](https://www.typescriptlang.org/)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-yellow.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
----
-
-## ⚡ One-Click Vercel Deployment
-
-COGNIVA is configured for instant deployment to **Vercel** with both frontend and serverless Python backend:
-
-1. Push your repository to GitHub.
-2. Go to **[vercel.com](https://vercel.com)** and click **"Add New Project"**.
-3. Import your repository (`Vaibhav-coder-king/timepass`).
-4. Vercel automatically detects the configuration from `vercel.json`:
-   - **Framework Preset**: `Vite`
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-   - **Serverless API**: `api/index.py` (Flask backend)
-5. *(Optional)* Add Environment Variable:
-   - `VITE_GEMINI_API_KEY`: your Gemini API key (can also be entered in-app)
-6. Click **Deploy**!
-
-Both your PWA frontend and `/api/*` serverless backend endpoints will be live on your Vercel URL with zero configuration.
+An offline-first, culturally grounded Progressive Web Application (PWA) designed to provide cognitive gaming, memory assistance, routine tracking, and non-diagnostic neurological observation for elderly individuals with mild cognitive impairment (MCI) and dementia across **North-East India (NER)**.
 
 ---
 
-## 🚀 Merged Single HTTP Service Architecture
+## 🌟 Key Features
 
-The frontend (React PWA) and backend (Flask API + SQLite + MIRA AI) are now merged into a **single unified HTTP service** running on port **5000**:
+### 🧠 8 Culturally Grounded Cognitive Modules
+1. **Memory Match (`/games/memory-match`)**: Short-term visual & episodic recall using familiar NER symbols (One-horned Rhino, Hornbill, Tea garden).
+2. **Daily Sequence (`/games/daily-sequence`)**: Executive planning and procedural memory ordering everyday routines without drag-and-drop.
+3. **Canvas Clock Draw (`/games/clock-draw`)**: High-DPI canvas visuospatial clock drawing with stroke telemetry, undo/clear controls, and touch optimization.
+4. **Vernacular Audio Stroop (`/games/audio-stroop`)**: Selective attention and cognitive inhibition with spoken audio prompts in Assamese, Hindi, and English.
+5. **Reality Anchor (`/games/reality-anchor`)**: Orientation awareness grounded in real-world date, time, and season with gentle escape options.
+6. **Acoustic Recognition (`/games/acoustic-recognition`)**: Auditory recall with Web Audio API procedural sound synthesis (temple bell, rainfall, flute, birdsong).
+7. **Passive Tremor Telemetry (`/games/tremor-telemetry`)**: 5-second controlled steady-hold gesture computing RMS acceleration via the `DeviceMotionEvent` API.
+8. **Pattern Association (`/games/pattern-match`)**: Culturally rich pattern matching celebrating Assamese Muga silk weaves, Kopou phool, and Bihu motifs.
 
-```bash
-npm start
-# or for live watch & rebuild:
-npm run dev
-```
+### 🛡️ 7-Role Server-Enforced RBAC
+- **Patient**: Zero-password, device-as-identity pass-through for friction-free access.
+- **Family**: Adherence summaries, activity logs, and reminder setup.
+- **ASHA Workers**: Field-visit patient caseload monitoring and offline sync queues.
+- **Doctors / Neurologists**: 5-Axis Neuro Radar charts, longitudinal response latency curves, and observational tremor tracking.
+- **Hospitals**: Institutional patient counts and clinician roster management.
+- **NGOs**: De-identified cohort analytics and regional coverage reporting.
+- **Admins**: User provisioning, database migration health, and immutable audit logs.
 
-- **Unified URL**: `http://localhost:5000`
-- **Mobile LAN Access**: `http://<your-lan-ip>:5000`
-- **Frontend SPA**: React Router handles all views (`/`, `/games`, `/caregiver`, `/settings`, `/my-day`, `/reminders`) directly through client routing.
-- **Backend API**: All REST endpoints are served on the same origin (`/api/sync`, `/api/analytics`, `/api/login`, `/api/mira/chat`, `/api/health`).
-- **Zero CORS Issues**: Because both the UI assets and API routes originate from the exact same port (`5000`), no cross-origin configurations or external reverse proxies are required.
+### 📱 Patient Assistance Suite
+- **My Day (`/my-day`)**: Daily routine tracker with Morning, Afternoon, and Evening slots, custom activity creation, and automated midnight resets.
+- **Reminders (`/reminders`)**: Medicine and doctor appointment manager with time sorting, active toggles, and "Done today" tracking.
+- **Memories (`/memories`)**: Private offline family photo and voice album stored strictly within local sandbox storage.
+- **Government Hub (`/govt-hub`)**: Verified directory of official Indian elder-care schemes (Ayushman Bharat PM-JAY 70+, NPHCE, Tele-MANAS 14416, Elder Line 14567, RVY, Atal Amrit Abhiyan).
+- **MIRA Assistant & Offline Triage (`/triage`)**: Multilingual AI companion with deterministic offline clinical triage fallback.
 
 ---
 
-## 📋 Quick Setup & Installation
+## 🚀 Quick Start
 
 ### 1. Prerequisites
-- **Node.js** v18+ ([nodejs.org](https://nodejs.org))
-- **Python** 3.10+ ([python.org](https://www.python.org))
+- Node.js 18+ and npm
+- Python 3.10+
 
-### 2. Install Dependencies
-```bash
-# Install frontend packages (including concurrently & Vite PWA)
+### 2. Frontend Setup
+```powershell
+# Install frontend dependencies
 npm install
 
-# Install backend Python dependencies
-pip install -r backend/requirements.txt
-```
-
-### 3. Configure Environment (`.env`)
-Copy `.env.example` to `.env`:
-```bash
-cp .env.example .env
-```
-Key variables:
-```env
-# Optional Gemini API Key for MIRA AI conversational assistant
-VITE_GEMINI_API_KEY=your_gemini_api_key_here
-
-# API base path (defaults to /api which proxies to Flask on port 5000)
-VITE_API_URL=/api
-```
-*(Note: Gemini API key can also be entered directly from the in-app **Settings & Setup** page without restarting).*
-
-### 4. Run Development Server
-```bash
+# Start Vite development server
 npm run dev
+# Accessible at http://localhost:5173
 ```
-*(On Windows, you can also simply double-click `start.bat`).*
 
----
+### 3. Backend Setup
+```powershell
+cd backend
 
-## 🌟 Key Platform Features & Upgrades
+# Create and activate virtual environment
+python -m venv venv
+.\venv\Scripts\activate
 
-### 1. 🤖 MIRA AI — Multilingual Voice & Companion Engine
-- **Voice Gender Switching**: Switch between **Female (MIRA)** and **Male (MIRO)** voice anytime from the top header of MIRA's panel or through Settings. The app intelligently selects native browser speech voices and modulates pitch/inflection for warmth.
-- **True Multilingual Responses**: MIRA provides culturally-grounded static offline and online responses in:
-  - 🇬🇧 **English**
-  - 🇮🇳 **অসমীয়া (Assamese)**
-  - 🇮🇳 **हिंदी (Hindi)**
-  - 🇮🇳 **বাংলা (Bengali)**
-- **Intent Detection**: Recognizes 13 distinct elder care intents (Game guidance, Routine, Medicine reminders, Tea/Refreshment, Family reassurance, Time/Date, Doctor alerts, Anxiety calming) without requiring an active internet connection.
+# Install Python requirements
+pip install flask flask-cors pyjwt
 
-### 2. ⚙️ Accessible Controls & Compact Toggles
-- Decreased toggle size (`w-11 h-6` with `w-4 h-4` thumb) across the entire application for cleaner layout while retaining elderly-accessible click/touch targets.
-- **Old Settings Restored**: The gear button (`⚙️`) on the Patient Home Screen directly opens the accessible slide-in drawer (Text Size, High Contrast, Smooth Motion, Sound On/Off, Voice Gender selection, and Language selector).
-- Direct link inside the drawer allows navigation to advanced AI & caregiver configuration.
+# Seed test database (15 sessions across Assam, Meghalaya, Nagaland)
+python migrate_rbac.py
 
-### 3. 📊 Care Insights — Date, Time & Trend Graphs
-- **Live Monitoring Session**: Displays the active calendar date (e.g., *Wednesday, 21 October 2026*) and live clock time.
-- **Date & Time Tracking on Graphs**: Every game session point on the Recharts graph displays both the session date and time in tooltips and X-axis labels (e.g. `21 Oct 16:10`).
-- **Four Telemetry Graphs**:
-  - Memory Match Response Duration (Seconds)
-  - Memory Match Accuracy & Error Count (Moving Average)
-  - Daily Sequence Task Duration (Seconds)
-  - Daily Sequence Step Errors
-- **Reference Baseline Preview**: When first running the app before games are recorded, a baseline reference curve is available so caregivers can explore the visual telemetry immediately.
-
-### 4. 📱 Android & Mobile PWA Compatibility
-- **Full PWA Compliance**: Registered Service Worker (`workbox`), installable web manifest (`manifest.webmanifest`), `viewport-fit=cover`, and maskable Android icon sets (192x192 & 512x512).
-- **Network Mobile Access**: Vite `server.host: true` allows any smartphone on the same Wi-Fi network to open `http://<YOUR_PC_IP>:5173` and click **"Add to Home screen"** or **"Install App"** to run as a full-screen native Android app.
-- **Zero CORS / Unified Proxy**: Frontend services use relative `/api` paths routed through Vite's dev proxy, preventing cross-origin errors on mobile devices.
-
-### 5. 🗄️ Offline-First SQLite Database (MongoDB Ready)
-- Game telemetry is recorded locally in `localStorage` and automatically syncs to SQLite via `/api/sync` when connectivity is established.
-- Database operates in WAL (Write-Ahead Logging) mode for concurrency and zero thread-blocking.
-
----
-
-## 🛠️ Project Structure
-
-```
-├── backend/
-│   ├── app.py                 # Flask API (/api/sync, /api/analytics, /api/mira/chat)
-│   └── requirements.txt       # Python dependencies (flask, flask-cors)
-├── public/
-│   ├── pwa-192x192.png        # Android PWA icon
-│   ├── pwa-512x512.png        # High-res PWA icon
-│   └── pwa-maskable-*.png     # Android adaptive icon layers
-├── src/
-│   ├── components/
-│   │   ├── accessibility/     # AccessibilityPanel, ContrastToggle, ReducedMotionToggle
-│   │   ├── mira/              # MiraPanel (Voice switcher, localized quick prompts)
-│   │   └── patient/           # PatientHomeScreen, ActionCardGrid, GreetingHeader
-│   ├── context/
-│   │   ├── AccessibilityContext.tsx # Global text size, contrast, voice gender, sound
-│   │   ├── AuthContext.tsx          # Caregiver role authentication
-│   │   ├── LanguageContext.tsx      # Multi-language translation engine
-│   │   └── MiraContext.tsx          # MIRA voice synthesis and conversation state
-│   ├── games/
-│   │   ├── MemoryMatch.tsx          # Cultural Memory Matching game
-│   │   └── DailySequence.tsx        # Daily living activity sequencer
-│   ├── screens/
-│   │   ├── CaregiverDashboard.tsx   # Trend graphs with dates, times & analytics
-│   │   ├── SettingsScreen.tsx       # Advanced AI configuration & PWA installation
-│   │   └── TriageChatbot.tsx        # Offline clinical assessment
-│   └── services/
-│       ├── geminiService.ts         # Multilingual MIRA intent engine & Gemini API
-│       └── syncService.ts           # Offline sync and analytics fetching
-├── package.json               # Concurrently dev script & dependencies
-└── vite.config.ts             # Vite server host, PWA manifest, API proxy
+# Launch Flask API server
+python app.py
+# Running at http://127.0.0.1:5000
 ```
 
 ---
 
-## 🧪 Available Scripts
+## 🧪 Testing
 
-| Command | Action |
-|---|---|
-| `npm run dev` | Launch Flask backend and Vite frontend concurrently |
-| `npm run dev:frontend` | Launch only Vite frontend (`port 5173`) |
-| `npm run dev:backend` | Launch only Flask backend (`port 5000`) |
-| `npm run build` | Compile TypeScript and build production PWA (`dist/`) |
-| `npm run preview` | Preview production build locally |
+```powershell
+# Run backend RBAC test suite (All 7 pass)
+cd backend
+python test_rbac.py
+
+# Run adaptive difficulty tests (All 8 pass)
+python test_backend.py
+
+# Run production frontend build & TypeScript verification
+cd ..
+npm run build
+```
+
+---
+
+## 📚 Documentation
+
+Comprehensive system documentation is located in the [`docs/`](./docs) directory:
+- [System Architecture](./docs/ARCHITECTURE.md)
+- [API Specification](./docs/API_SPECIFICATION.md)
+- [Database Schema](./docs/DATABASE_SCHEMA.md)
+- [Role & Permission Matrix](./docs/ROLE_AND_PERMISSION_MATRIX.md)
+- [Cognitive Game Metrics](./docs/GAME_METRICS.md)
+- [Offline-First & Sync Architecture](./docs/OFFLINE_AND_SYNC.md)
+- [Security & Privacy Guide](./docs/SECURITY_AND_PRIVACY.md)
+- [Accessibility (a11y) Conformance](./docs/ACCESSIBILITY.md)
+- [Government Schemes Directory](./docs/GOVERNMENT_SCHEMES.md)
+- [Testing Guide](./docs/TESTING_GUIDE.md)
+- [Production Deployment Guide](./docs/DEPLOYMENT_GUIDE.md)
+- [Known Limitations & Roadmap](./docs/KNOWN_LIMITATIONS_AND_ROADMAP.md)
+- [ADR-001: Offline-First & RBAC](./docs/DECISIONS/ADR-001_OFFLINE_FIRST_AND_RBAC.md)
+
+---
+
+## ⚖️ Clinical Disclaimer
+
+COGNIVA is designed for cognitive engagement, behavioral stimulation, and assisted routine management. It is **not a certified diagnostic medical device**. The scores, radar charts, and sensor measurements generated by COGNIVA do not constitute medical advice or a diagnosis of Alzheimer's disease, dementia, or any neurological condition.

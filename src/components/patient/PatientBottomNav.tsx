@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Home, Gamepad2, MessageCircleHeart, BookImage, MoreHorizontal, type LucideProps } from 'lucide-react';
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useMira } from '../../context/MiraContext';
 
@@ -15,27 +15,51 @@ interface NavItem {
 }
 
 interface PatientBottomNavProps {
-  activeTab: string;
+  activeTab?: string;
   onTabChange?: (tab: string) => void;
 }
 
 /**
  * Persistent patient bottom navigation: Home / Play / MIRA / Memories / More (Settings)
- * 80px height, large icons + labels. Fully localised via LanguageContext.
+ * 80px height, large touch targets, clear labels. Fully localised via LanguageContext.
  * Sliding active indicator via Framer Motion layoutId.
  */
 export function PatientBottomNav({ activeTab, onTabChange }: PatientBottomNavProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useLanguage();
   const { activate } = useMira();
 
-  // Labels are computed from the dictionary so they update when language changes
+  // Compute active tab from route if not explicitly supplied
+  let currentTab = activeTab;
+  if (!currentTab) {
+    const path = location.pathname;
+    if (path === '/') currentTab = 'home';
+    else if (path === '/games' || path.startsWith('/games')) currentTab = 'play';
+    else if (path.startsWith('/memories')) currentTab = 'memories';
+    else if (
+      path.startsWith('/settings') ||
+      path.startsWith('/caregiver') ||
+      path.startsWith('/dashboard') ||
+      path.startsWith('/asha') ||
+      path.startsWith('/doctor') ||
+      path.startsWith('/hospital') ||
+      path.startsWith('/ngo') ||
+      path.startsWith('/admin') ||
+      path.startsWith('/govt-hub')
+    ) {
+      currentTab = 'more';
+    } else {
+      currentTab = 'home';
+    }
+  }
+
   const NAV_ITEMS: NavItem[] = [
-    { id: 'home',     label: t('nav.home'),     Icon: Home,               ariaLabel: 'Go to Home' },
-    { id: 'play',     label: t('nav.play'),     Icon: Gamepad2,           ariaLabel: 'Go to Games' },
-    { id: 'mira',     label: t('nav.mira'),     Icon: MessageCircleHeart, ariaLabel: 'Talk to MIRA' },
-    { id: 'memories', label: t('nav.memories'), Icon: BookImage,          ariaLabel: 'View Memories' },
-    { id: 'more',     label: t('nav.more'),     Icon: MoreHorizontal,     ariaLabel: 'Settings & More' },
+    { id: 'home',     label: t('nav.home') || 'Home',         Icon: Home,               ariaLabel: 'Go to Home' },
+    { id: 'play',     label: t('nav.play') || 'Play',         Icon: Gamepad2,           ariaLabel: 'Go to Games' },
+    { id: 'mira',     label: t('nav.mira') || 'MIRA',         Icon: MessageCircleHeart, ariaLabel: 'Talk to MIRA' },
+    { id: 'memories', label: t('nav.memories') || 'Memories', Icon: BookImage,          ariaLabel: 'View Memories' },
+    { id: 'more',     label: t('nav.more') || 'More',         Icon: MoreHorizontal,     ariaLabel: 'Settings & Portals' },
   ];
 
   const handleTabPress = (id: string) => {
@@ -53,9 +77,9 @@ export function PatientBottomNav({ activeTab, onTabChange }: PatientBottomNavPro
   return (
     <nav
       aria-label="Main navigation"
-      className="fixed bottom-0 left-0 right-0 z-20 border-t border-[rgba(var(--color-text-primary),0.08)]"
+      className="fixed bottom-0 left-0 right-0 z-40 border-t border-[rgba(var(--color-border),0.4)]"
       style={{
-        background: 'rgba(var(--color-surface-bg), 0.95)',
+        background: 'rgba(var(--color-surface-bg), 0.94)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         paddingBottom: 'var(--safe-bottom)',
@@ -63,12 +87,12 @@ export function PatientBottomNav({ activeTab, onTabChange }: PatientBottomNavPro
     >
       <ul
         role="list"
-        className="flex items-stretch"
-        style={{ height: 80 }}
+        className="flex items-stretch max-w-lg mx-auto"
+        style={{ height: 76 }}
       >
         {NAV_ITEMS.map(({ id, label, Icon, ariaLabel }) => {
-          const isActive = activeTab === id;
-          const strokeWidth = isActive ? 2.2 : 1.8;
+          const isActive = currentTab === id;
+          const strokeWidth = isActive ? 2.3 : 1.8;
 
           return (
             <li key={id} className="flex-1">
@@ -105,7 +129,7 @@ export function PatientBottomNav({ activeTab, onTabChange }: PatientBottomNavPro
 
                 {/* Label */}
                 <span
-                  className="font-medium leading-none"
+                  className="font-semibold leading-none"
                   style={{ fontSize: '11px' }}
                 >
                   {label}

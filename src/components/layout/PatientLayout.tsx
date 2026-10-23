@@ -1,6 +1,5 @@
 import React from 'react';
 import { SafeAreaContainer } from './SafeAreaContainer';
-import { PatientBottomNav } from '../patient/PatientBottomNav';
 
 interface PatientLayoutProps {
   children: React.ReactNode;
@@ -9,20 +8,15 @@ interface PatientLayoutProps {
 
 /**
  * Patient-facing layout wrapper.
- * - No sidebar, no dense navigation
- * - Includes persistent bottom nav
- * - Safe area padding for tablet/phone notches
+ * - Provides safe-area constraints for elder-friendly touch interactions.
+ * - Persistent navigation is provided at the AppShell layer.
  */
-export function PatientLayout({ children, activeTab = 'home' }: PatientLayoutProps) {
+export function PatientLayout({ children }: PatientLayoutProps) {
   return (
     <SafeAreaContainer className="flex flex-col min-h-screen">
-      {/* Scrollable content area — pb accounts for bottom nav height */}
-      <div className="flex-1 overflow-y-auto pb-24">
+      <div className="flex-1 w-full">
         {children}
       </div>
-
-      {/* Persistent Bottom Nav */}
-      <PatientBottomNav activeTab={activeTab} />
     </SafeAreaContainer>
   );
 }

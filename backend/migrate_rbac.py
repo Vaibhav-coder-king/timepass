@@ -78,6 +78,11 @@ def run_migration():
         ("sess_a3", "MEMORY_MATCH", 38, 1, 3, "device_alpha", "Assam", (base_time - timedelta(days=2)).isoformat()),
         ("sess_a4", "DAILY_SEQUENCE", 55, 2, 1, "device_alpha", "Assam", (base_time - timedelta(days=2)).isoformat()),
         ("sess_a5", "DAILY_SEQUENCE", 48, 1, 2, "device_alpha", "Assam", (base_time - timedelta(days=1)).isoformat()),
+        ("sess_a6", "MEMORY_MATCH", 42, 1, 2, "device_alpha", "Assam", (base_time - timedelta(days=1)).isoformat()),
+        ("sess_a7", "DAILY_SEQUENCE", 50, 0, 2, "device_alpha", "Assam", (base_time - timedelta(hours=18)).isoformat()),
+        ("sess_a8", "MEMORY_MATCH", 35, 0, 3, "device_alpha", "Assam", (base_time - timedelta(hours=12)).isoformat()),
+        ("sess_a9", "DAILY_SEQUENCE", 46, 1, 3, "device_alpha", "Assam", (base_time - timedelta(hours=6)).isoformat()),
+        ("sess_a10", "MEMORY_MATCH", 30, 0, 3, "device_alpha", "Assam", (base_time - timedelta(hours=2)).isoformat()),
         
         # device_beta / Meghalaya (viewable by Hospital only, NOT Assam NGO, NOT device_alpha Family)
         ("sess_b1", "MEMORY_MATCH", 60, 5, 1, "device_beta", "Meghalaya", (base_time - timedelta(days=3)).isoformat()),

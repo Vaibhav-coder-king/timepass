@@ -30,6 +30,7 @@
     --color-surface-card: 255 255 255;
     --color-surface-elevated: 255 255 255;
     --color-surface-overlay: 15 15 30;
+    --color-border: 226 232 240;
 
     /* Text */
     --color-text-primary: 28 25 23;     /* #1C1917 warm near-black */
@@ -115,14 +116,15 @@
     --touch-comfortable: 88px;
   }
 
-  /* ── High Contrast & Dark Mode Overrides ── */
-  html.dark, .dark, [data-contrast="high-contrast"] {
+  /* ── Dark Mode Design Tokens (WCAG AA Compliant) ── */
+  html.dark, .dark {
     --color-surface-bg: 15 23 42;       /* #0F172A deep dark slate */
     --color-surface-card: 30 41 59;     /* #1E293B slate 800 */
     --color-surface-elevated: 51 65 85; /* #334155 slate 700 */
     --color-text-primary: 248 250 252;  /* #F8FAFC slate 50 */
     --color-text-secondary: 203 213 225;/* #CBD5E1 slate 300 */
     --color-text-muted: 148 163 184;
+    --color-border: 51 65 85;
     --card-play: 30 41 59;
     --card-play-icon: 147 197 253;
     --card-myday: 30 41 59;
@@ -133,6 +135,14 @@
     --card-family-icon: 248 113 113;
     --card-mira: 30 41 59;
     --card-mira-icon: 167 139 250;
+    --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  /* ── High Contrast Mode (Intentional High Visibility Outlines) ── */
+  [data-contrast="high-contrast"] {
+    --shadow-card: 0 0 0 2px #2563EB;
+  }
+  html.dark[data-contrast="high-contrast"], .dark[data-contrast="high-contrast"] {
     --shadow-card: 0 0 0 2px #60A5FA;
   }
 
@@ -187,8 +197,8 @@
     background: linear-gradient(
       135deg,
       rgb(var(--color-surface-bg)) 0%,
-      rgb(252, 247, 255) 50%,
-      rgb(255, 249, 245) 100%
+      rgba(var(--color-primary-light), 0.04) 50%,
+      rgb(var(--color-surface-bg)) 100%
     );
   }
 

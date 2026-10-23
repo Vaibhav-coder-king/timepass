@@ -1,64 +1,120 @@
 /**
- * COGNIVA Sync Service — Phase 3 & 4
+ * COGNIVA Sync Service — Offline-First Synchronization Engine
  *
- * Manages the offline-first data bridge between the app and backend.
- * Operates 100% offline-first: if no backend is present, computes real analytics
- * directly from localStorage sessions so the app is completely self-reliant.
+ * Provides a dependable offline data bridge between browser storage and the backend.
+ * Enforces strict synchronization truthfulness:
+ * - 'synced'  : Confirmed by server acknowledgement for all local records.
+ * - 'syncing' : In-flight batch upload to backend.
+ * - 'pending' : Saved locally, awaiting sync queue transmission.
+ * - 'offline' : Device is offline; records are preserved safely in localStorage.
+ * - 'error'   : Network or server error during synchronization attempt.
+ *
+ * Never marks sessions synced without server acknowledgement.
+ * Never drops unsynced records on failed requests.
  */
 
 import { getSessions, markSynced, getUnsyncedCount, type GameSession } from '../utils/storage';
 
-// ── API URL — uses relative /api (proxied in dev or served on same origin) ─────
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
-// ── Sync state ────────────────────────────────────────────────────────────────
+export type SyncState = 'synced' | 'syncing' | 'pending' | 'offline' | 'error';
 
-export type SyncState = 'idle' | 'syncing' | 'synced' | 'offline';
+export interface SyncStatusPayload {
+  state: SyncState;
+  unsyncedCount: number;
+  lastSyncTime: string | null;
+  errorMessage?: string;
+}
 
-let currentState: SyncState = 'idle';
+// ── State Management ─────────────────────────────────────────────────────────
+
+function computeInitialState(): SyncState {
+  const count = getUnsyncedCount();
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+  if (!isOnline) {
+    return 'offline';
+  }
+  return count > 0 ? 'pending' : 'synced';
+}
+
+let currentState: SyncState = computeInitialState();
 let currentUnsyncedCount: number = getUnsyncedCount();
-const stateListeners = new Set<(state: SyncState, count: number) => void>();
+let lastSyncTimestamp: string | null = localStorage.getItem('cogniva_last_sync_time');
+const stateListeners = new Set<(status: SyncStatusPayload) => void>();
 
-function setState(state: SyncState): void {
-  currentState = state;
+function emitState(errorMessage?: string): void {
   currentUnsyncedCount = getUnsyncedCount();
-  stateListeners.forEach(cb => cb(currentState, currentUnsyncedCount));
+  const payload: SyncStatusPayload = {
+    state: currentState,
+    unsyncedCount: currentUnsyncedCount,
+    lastSyncTime: lastSyncTimestamp,
+    errorMessage,
+  };
+  stateListeners.forEach(cb => cb(payload));
 }
 
 export function subscribeSyncState(
-  cb: (state: SyncState, unsyncedCount: number) => void
+  cb: (status: SyncStatusPayload) => void
 ): () => void {
   stateListeners.add(cb);
-  cb(currentState, currentUnsyncedCount);
+  cb({
+    state: currentState,
+    unsyncedCount: currentUnsyncedCount,
+    lastSyncTime: lastSyncTimestamp,
+  });
   return () => stateListeners.delete(cb);
 }
 
-// ── Core sync loop ────────────────────────────────────────────────────────────
+// ── Core Synchronization Logic ────────────────────────────────────────────────
 
-let isSyncing = false;
+let isSyncInProgress = false;
+let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let retryAttempt = 0;
+const MAX_BACKOFF_MS = 30000;
 
-export async function syncPendingSessions(): Promise<void> {
-  if (isSyncing) return;
+/**
+ * Synchronizes pending local sessions with the remote backend.
+ * Uses bounded exponential backoff with jitter on temporary failures.
+ *
+ * @param isManualRetry If true, resets backoff counters and attempts immediate sync.
+ */
+export async function syncPendingSessions(isManualRetry: boolean = false): Promise<boolean> {
+  if (isManualRetry && retryTimeoutId) {
+    clearTimeout(retryTimeoutId);
+    retryTimeoutId = null;
+    retryAttempt = 0;
+  }
+
+  if (isSyncInProgress) {
+    return false;
+  }
 
   const unsynced = getSessions().filter(s => s.synced === 0);
+
+  // If there are zero unsynced sessions, state is truthful 'synced' or 'offline'
   if (unsynced.length === 0) {
-    setState('synced');
-    return;
+    currentState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'synced';
+    emitState();
+    return true;
   }
 
-  if (!navigator.onLine) {
-    setState('offline');
-    return;
+  // If client network is offline, preserve in queue and report offline
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    currentState = 'offline';
+    emitState();
+    return false;
   }
 
-  isSyncing = true;
-  setState('syncing');
+  isSyncInProgress = true;
+  currentState = 'syncing';
+  emitState();
 
   try {
     const payload = unsynced.map(({ synced: _s, ...rest }) => rest);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
 
     const response = await fetch(`${API_URL}/sync`, {
       method: 'POST',
@@ -70,23 +126,57 @@ export async function syncPendingSessions(): Promise<void> {
     clearTimeout(timeoutId);
 
     if (response.ok) {
-      const data = (await response.json()) as { acknowledged_ids?: string[] };
-      if (data.acknowledged_ids) {
-        data.acknowledged_ids.forEach(id => markSynced(Number(id)));
+      const data = (await response.json()) as { acknowledged_ids?: (string | number)[] };
+      if (Array.isArray(data.acknowledged_ids)) {
+        data.acknowledged_ids.forEach(id => markSynced(id));
       }
-      setState(getUnsyncedCount() === 0 ? 'synced' : 'offline');
+
+      const remaining = getUnsyncedCount();
+      lastSyncTimestamp = new Date().toISOString();
+      try {
+        localStorage.setItem('cogniva_last_sync_time', lastSyncTimestamp);
+      } catch { /* Quota */ }
+
+      retryAttempt = 0;
+      currentState = remaining === 0 ? 'synced' : 'pending';
+      emitState();
+      return true;
     } else {
-      setState('offline');
+      throw new Error(`Server returned status ${response.status}`);
     }
-  } catch {
-    // If backend is unreachable, sessions remain safe in localStorage
-    setState('offline');
+  } catch (err: unknown) {
+    const isNetworkErr =
+      err instanceof TypeError ||
+      (err instanceof Error && (err.name === 'AbortError' || err.message.includes('fetch')));
+
+    currentState = isNetworkErr ? 'offline' : 'error';
+    const errMsg = err instanceof Error ? err.message : 'Sync request failed';
+    emitState(errMsg);
+
+    // Schedule bounded exponential backoff with jitter if online
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      retryAttempt++;
+      const jitter = Math.random() * 1000;
+      const delay = Math.min(1000 * Math.pow(2, retryAttempt) + jitter, MAX_BACKOFF_MS);
+      if (retryTimeoutId) clearTimeout(retryTimeoutId);
+      retryTimeoutId = setTimeout(() => {
+        syncPendingSessions();
+      }, delay);
+    }
+    return false;
   } finally {
-    isSyncing = false;
+    isSyncInProgress = false;
   }
 }
 
-// ── Fetch analytics data ──────────────────────────────────────────────────────
+/**
+ * Public trigger for manual user retry (e.g. tapping the status pill).
+ */
+export function triggerManualSync(): Promise<boolean> {
+  return syncPendingSessions(true);
+}
+
+// ── Analytics Models & Offline Computation ────────────────────────────────────
 
 export interface GameStats {
   labels: string[];
@@ -100,6 +190,7 @@ export interface AnalyticsData {
   attention_needed: boolean;
   MEMORY_MATCH: GameStats;
   DAILY_SEQUENCE: GameStats;
+  [key: string]: unknown;
 }
 
 const EMPTY_GAME_STATS: GameStats = {
@@ -119,24 +210,23 @@ function computeMovingAvg(values: number[], windowSize: number = 3): number[] {
   });
 }
 
-function formatSessionLabel(timestamp: number): string {
-  const d = new Date(timestamp);
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) + ' ' +
-         d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+function formatSessionLabel(timestamp: string | number): string {
+  const ts = typeof timestamp === 'number' ? timestamp : Date.parse(timestamp) || Date.now();
+  const d = new Date(ts);
+  return (
+    d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) +
+    ' ' +
+    d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
+  );
 }
 
-// Client-side analytics engine computed directly from local storage
 export function computeLocalAnalytics(): AnalyticsData {
   const allSessions = getSessions();
-
   const mmSessions = allSessions.filter(s => s.game === 'MEMORY_MATCH').slice(-10);
   const dsSessions = allSessions.filter(s => s.game === 'DAILY_SEQUENCE').slice(-10);
 
-  // If user has played actual sessions, format them
   const buildStats = (sessions: GameSession[]): GameStats => {
-    if (sessions.length === 0) {
-      return EMPTY_GAME_STATS;
-    }
+    if (sessions.length === 0) return EMPTY_GAME_STATS;
 
     const labels = sessions.map(s => formatSessionLabel(s.id));
     const raw_time = sessions.map(s => s.time_taken_sec);
@@ -154,7 +244,6 @@ export function computeLocalAnalytics(): AnalyticsData {
   const mmStats = buildStats(mmSessions);
   const dsStats = buildStats(dsSessions);
 
-  // Check if attention needed (increasing error rates)
   const recentErrors = mmStats.raw_errors.slice(-3);
   const attention_needed =
     recentErrors.length === 3 &&
@@ -169,7 +258,6 @@ export function computeLocalAnalytics(): AnalyticsData {
 }
 
 export async function fetchAnalytics(): Promise<AnalyticsData> {
-  // 1. Attempt to fetch live from backend if reachable
   try {
     let authHeader = '';
     const rawAuth = localStorage.getItem('cogniva_auth_state');
@@ -182,7 +270,7 @@ export async function fetchAnalytics(): Promise<AnalyticsData> {
     if (authHeader) headers['Authorization'] = authHeader;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
 
     const response = await fetch(`${API_URL}/analytics`, {
       headers,
@@ -192,27 +280,33 @@ export async function fetchAnalytics(): Promise<AnalyticsData> {
     clearTimeout(timeoutId);
 
     if (response.ok) {
-      const remoteData = (await response.json()) as AnalyticsData;
-      return remoteData;
+      return (await response.json()) as AnalyticsData;
     }
   } catch {
-    // Backend unreachable — fallback seamlessly to local computation
+    // Offline or unreachable — fallback seamlessly to local storage computation
   }
 
-  // 2. Pure offline / client-side computation from localStorage
   return computeLocalAnalytics();
 }
 
-// ── Auto-triggers ─────────────────────────────────────────────────────────────
+// ── Browser Lifecycle Event Listeners ─────────────────────────────────────────
 
-window.addEventListener('online', () => syncPendingSessions());
-window.addEventListener('offline', () => setState('offline'));
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    currentState = getUnsyncedCount() > 0 ? 'pending' : 'synced';
+    emitState();
+    syncPendingSessions();
+  });
 
-// Initial sync attempt
-(function initialSync() {
+  window.addEventListener('offline', () => {
+    currentState = 'offline';
+    emitState();
+  });
+
+  // Safe initial verification on script load
   if (navigator.onLine && getUnsyncedCount() > 0) {
     syncPendingSessions();
   } else {
-    setState('synced');
+    emitState();
   }
-})();
+}

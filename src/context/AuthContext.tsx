@@ -1,6 +1,15 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { getInstallationId } from '../utils/storage';
 
-export type UserRole = 'Hospital' | 'NGO' | 'Family' | 'User';
+export type UserRole =
+  | 'Patient'
+  | 'Family'
+  | 'ASHA'
+  | 'Doctor'
+  | 'Hospital'
+  | 'NGO'
+  | 'Admin'
+  | 'User';
 
 export interface AuthUser {
   id: number;
@@ -8,12 +17,14 @@ export interface AuthUser {
   role: UserRole;
   device_id: string | null;
   region: string | null;
+  displayName?: string;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   login: (username: string, password: string) => Promise<boolean>;
+  enrollPatientDevice: (displayName?: string) => void;
   logout: () => void;
   isAuthenticated: boolean;
   role: UserRole | null;
@@ -22,43 +33,65 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const STORAGE_AUTH_KEY = 'cogniva_auth_state';
-
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
-// ── Built-in Offline / Standalone Credentials ────────────────────────────────
-// Allows instant zero-config login even if backend is offline or omitted
+// ── Built-in Offline & Standalone Verification Credentials ────────────────────
 const BUILTIN_USERS: Record<string, { pass: string[]; user: AuthUser }> = {
-  family_carer: {
-    pass: ['fam123', 'family', '123456'],
-    user: { id: 3, username: 'family_carer', role: 'Family', device_id: 'device_alpha', region: 'Assam' },
+  dr_sharma: {
+    pass: ['doc123', 'doctor', '123456'],
+    user: { id: 5, username: 'dr_sharma', role: 'Doctor', device_id: null, region: 'Assam', displayName: 'Dr. P. Sharma (Geriatrician)' },
   },
-  family: {
-    pass: ['fam123', 'family', '123456'],
-    user: { id: 3, username: 'family_carer', role: 'Family', device_id: 'device_alpha', region: 'Assam' },
+  doctor: {
+    pass: ['doc123', 'doctor', '123456'],
+    user: { id: 5, username: 'dr_sharma', role: 'Doctor', device_id: null, region: 'Assam', displayName: 'Dr. P. Sharma (Geriatrician)' },
+  },
+  asha_kalita: {
+    pass: ['asha123', 'asha', '123456'],
+    user: { id: 6, username: 'asha_kalita', role: 'ASHA', device_id: null, region: 'Assam', displayName: 'Rina Kalita (ASHA Lead, Kamrup)' },
+  },
+  asha: {
+    pass: ['asha123', 'asha', '123456'],
+    user: { id: 6, username: 'asha_kalita', role: 'ASHA', device_id: null, region: 'Assam', displayName: 'Rina Kalita (ASHA Lead, Kamrup)' },
   },
   admin_hospital: {
     pass: ['hosp123', 'hospital', 'admin', '123456'],
-    user: { id: 1, username: 'admin_hospital', role: 'Hospital', device_id: null, region: null },
-  },
-  admin: {
-    pass: ['hosp123', 'hospital', 'admin', '123456'],
-    user: { id: 1, username: 'admin_hospital', role: 'Hospital', device_id: null, region: null },
+    user: { id: 1, username: 'admin_hospital', role: 'Hospital', device_id: null, region: null, displayName: 'Guwahati Neurological Institute' },
   },
   hospital: {
     pass: ['hosp123', 'hospital', '123456'],
-    user: { id: 1, username: 'admin_hospital', role: 'Hospital', device_id: null, region: null },
+    user: { id: 1, username: 'admin_hospital', role: 'Hospital', device_id: null, region: null, displayName: 'Guwahati Neurological Institute' },
+  },
+  sys_admin: {
+    pass: ['admin123', 'admin', 'sysadmin', '123456'],
+    user: { id: 7, username: 'sys_admin', role: 'Admin', device_id: null, region: null, displayName: 'System Administrator' },
+  },
+  admin: {
+    pass: ['admin123', 'admin', 'sysadmin', '123456'],
+    user: { id: 7, username: 'sys_admin', role: 'Admin', device_id: null, region: null, displayName: 'System Administrator' },
   },
   ngo_worker: {
     pass: ['ngo123', 'ngo', '123456'],
-    user: { id: 2, username: 'ngo_worker', role: 'NGO', device_id: null, region: 'Assam' },
+    user: { id: 2, username: 'ngo_worker', role: 'NGO', device_id: null, region: 'Assam', displayName: 'NER Elder Care Foundation' },
   },
   ngo: {
     pass: ['ngo123', 'ngo', '123456'],
-    user: { id: 2, username: 'ngo_worker', role: 'NGO', device_id: null, region: 'Assam' },
+    user: { id: 2, username: 'ngo_worker', role: 'NGO', device_id: null, region: 'Assam', displayName: 'NER Elder Care Foundation' },
+  },
+  family_carer: {
+    pass: ['fam123', 'family', '123456'],
+    user: { id: 3, username: 'family_carer', role: 'Family', device_id: 'device_alpha', region: 'Assam', displayName: 'Bikram (Son & Primary Carer)' },
+  },
+  family: {
+    pass: ['fam123', 'family', '123456'],
+    user: { id: 3, username: 'family_carer', role: 'Family', device_id: 'device_alpha', region: 'Assam', displayName: 'Bikram (Son & Primary Carer)' },
   },
   elderly_user: {
     pass: ['user123', 'user', '123456'],
-    user: { id: 4, username: 'elderly_user', role: 'User', device_id: 'device_alpha', region: 'Assam' },
+    user: { id: 4, username: 'elderly_user', role: 'Patient', device_id: 'device_alpha', region: 'Assam', displayName: 'Arun' },
+  },
+  patient: {
+    pass: ['user123', 'user', '123456'],
+    user: { id: 4, username: 'elderly_user', role: 'Patient', device_id: 'device_alpha', region: 'Assam', displayName: 'Arun' },
   },
 };
 
@@ -89,11 +122,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, token]);
 
+  const enrollPatientDevice = (displayName?: string) => {
+    const installId = getInstallationId();
+    const patientUser: AuthUser = {
+      id: 9999,
+      username: `pat_${installId.substring(5, 13)}`,
+      role: 'Patient',
+      device_id: installId,
+      region: 'Assam',
+      displayName: displayName || 'Friend',
+    };
+    setUser(patientUser);
+    setToken(`token_${patientUser.username}_Patient`);
+  };
+
   const login = async (username: string, password: string): Promise<boolean> => {
     const cleanUser = username.trim().toLowerCase();
     const cleanPass = password.trim();
 
-    // 1. Try remote backend API first if available
+    // 1. Remote backend verification if available
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 2500);
@@ -114,14 +161,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return true;
       }
     } catch {
-      // Backend is unavailable or timed out — seamlessly use offline auth fallback
+      // Offline fallback
     }
 
-    // 2. Client-side Offline Auth Verification
-    // Direct match against known credentials
+    // 2. Client-side offline verification
     const matched = BUILTIN_USERS[cleanUser];
     if (matched) {
-      // If password matches or is provided
       if (cleanPass.length > 0 && (matched.pass.includes(cleanPass) || cleanPass.length >= 3)) {
         setUser(matched.user);
         setToken(`client_token_${matched.user.username}_${matched.user.role}`);
@@ -129,23 +174,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Fuzzy matching for user convenience (e.g. typing "fam", "hospital", "admin", "ngo")
-    if (cleanUser.includes('fam')) {
-      const famUser = BUILTIN_USERS.family_carer.user;
-      setUser(famUser);
-      setToken(`client_token_${famUser.username}_Family`);
+    // Fuzzy matching for quick field login during intermittent connectivity
+    if (cleanUser.includes('doc')) {
+      const u = BUILTIN_USERS.dr_sharma.user;
+      setUser(u);
+      setToken(`client_token_${u.username}_Doctor`);
       return true;
     }
-    if (cleanUser.includes('hosp') || cleanUser.includes('admin')) {
-      const hospUser = BUILTIN_USERS.admin_hospital.user;
-      setUser(hospUser);
-      setToken(`client_token_${hospUser.username}_Hospital`);
+    if (cleanUser.includes('asha')) {
+      const u = BUILTIN_USERS.asha_kalita.user;
+      setUser(u);
+      setToken(`client_token_${u.username}_ASHA`);
+      return true;
+    }
+    if (cleanUser.includes('fam')) {
+      const u = BUILTIN_USERS.family_carer.user;
+      setUser(u);
+      setToken(`client_token_${u.username}_Family`);
+      return true;
+    }
+    if (cleanUser.includes('hosp')) {
+      const u = BUILTIN_USERS.admin_hospital.user;
+      setUser(u);
+      setToken(`client_token_${u.username}_Hospital`);
       return true;
     }
     if (cleanUser.includes('ngo')) {
-      const ngoUser = BUILTIN_USERS.ngo_worker.user;
-      setUser(ngoUser);
-      setToken(`client_token_${ngoUser.username}_NGO`);
+      const u = BUILTIN_USERS.ngo_worker.user;
+      setUser(u);
+      setToken(`client_token_${u.username}_NGO`);
+      return true;
+    }
+    if (cleanUser.includes('admin') || cleanUser.includes('sys')) {
+      const u = BUILTIN_USERS.sys_admin.user;
+      setUser(u);
+      setToken(`client_token_${u.username}_Admin`);
       return true;
     }
 
@@ -163,6 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         token,
         login,
+        enrollPatientDevice,
         logout,
         isAuthenticated: !!user && !!token,
         role: user ? user.role : null,
