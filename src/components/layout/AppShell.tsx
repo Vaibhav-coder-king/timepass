@@ -13,9 +13,18 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [isA11yOpen, setIsA11yOpen] = useState(false);
   const location = useLocation();
 
-  // Active full-screen games: intentional focused interaction layout without nav occlusion
+  // Determine layout widths for full responsiveness across 320px -> 1440px+
   const isIndividualGame =
     location.pathname.startsWith('/games/') && location.pathname !== '/games';
+
+  const isWideRoute =
+    location.pathname.startsWith('/caregiver') ||
+    location.pathname.startsWith('/dashboard') ||
+    location.pathname.startsWith('/settings') ||
+    location.pathname.startsWith('/govt-hub') ||
+    location.pathname.startsWith('/reminders') ||
+    location.pathname.startsWith('/memories') ||
+    location.pathname === '/games';
 
   return (
     <div
@@ -23,12 +32,16 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       className="min-h-screen bg-cogniva-gradient flex flex-col relative text-[rgb(var(--color-text-primary))]"
       aria-label="COGNIVA Application"
     >
-      {/* Main content area */}
+      {/* Main content area: Responsive container adapting from mobile 320px to ultrawide */}
       <main
         id="main-content"
         tabIndex={-1}
-        className={`flex-1 w-full max-w-lg mx-auto overflow-x-hidden ${
-          isIndividualGame ? 'pb-0' : 'pb-24'
+        className={`flex-1 w-full mx-auto overflow-x-hidden transition-all duration-200 ${
+          isIndividualGame
+            ? 'max-w-4xl pb-0 px-2 sm:px-4'
+            : isWideRoute
+            ? 'max-w-5xl lg:max-w-6xl px-3 sm:px-6 pb-28'
+            : 'max-w-xl md:max-w-2xl px-3 sm:px-4 pb-28'
         }`}
       >
         {children}

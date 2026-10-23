@@ -178,10 +178,24 @@
     border-radius: var(--radius-sm);
   }
 
-  /* Touch targets — enforce minimum */
-  button, [role="button"], a {
+  /* Touch targets — enforce minimum for main buttons while keeping switches & compact controls normal */
+  button:not([role="switch"]):not([data-compact]):not(.btn-compact),
+  [role="button"]:not([role="switch"]):not([data-compact]):not(.btn-compact),
+  a:not([data-compact]):not(.btn-compact) {
     min-height: var(--touch-min);
+  }
+
+  button, [role="button"], a {
     cursor: pointer;
+  }
+
+  /* Reset forced touch min-height for toggle switches and compact controls */
+  button[role="switch"],
+  [role="switch"],
+  .toggle-switch,
+  [data-compact="true"],
+  .btn-compact {
+    min-height: unset;
   }
 
   /* Scrollbar styling */

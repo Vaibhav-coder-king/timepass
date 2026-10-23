@@ -30,6 +30,32 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
     <title>COGNIVA — Remember. Engage. Connect.</title>
+
+    <!-- Instant Theme Detection Script (Zero Flashing) -->
+    <script>
+      (function() {
+        try {
+          var raw = localStorage.getItem('cogniva_accessibility');
+          var mode = 'system';
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            if (parsed.themeMode) {
+              mode = parsed.themeMode;
+            } else if (parsed.contrastMode === 'high-contrast') {
+              mode = 'dark';
+            }
+          }
+          var isDark = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.setAttribute('data-theme', 'dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.setAttribute('data-theme', 'light');
+          }
+        } catch(e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -57,17 +57,19 @@ export function ReducedMotionToggle({ className }: ReducedMotionToggleProps) {
         {/* Compact Toggle pill */}
         <div
           aria-hidden="true"
+          data-compact="true"
           className={clsx(
-            'relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-300',
+            'relative flex-shrink-0 w-12 h-7 rounded-full inline-flex items-center p-0.5 transition-colors duration-200',
             isReduced
               ? 'bg-[rgb(var(--color-success))]'
               : 'bg-[rgb(var(--color-primary))]'
           )}
+          style={{ minHeight: '28px', height: '28px', width: '48px' }}
         >
-          <div
+          <span
             className={clsx(
-              'absolute top-1 w-4 h-4 rounded-full bg-white transition-transform duration-300',
-              isReduced ? 'translate-x-6' : 'translate-x-1'
+              'w-6 h-6 rounded-full bg-white shadow-sm transform transition-transform duration-200',
+              isReduced ? 'translate-x-5' : 'translate-x-0'
             )}
           />
         </div>

@@ -11,8 +11,6 @@ import {
   VolumeX,
   Globe,
   Type,
-  Sun,
-  Moon,
   ShieldCheck,
   Smartphone,
   User,
@@ -22,8 +20,13 @@ import {
   Send,
   Download,
   Activity,
+  AlertCircle,
+  Save,
+  X,
 } from 'lucide-react';
 import { useAccessibility } from '../context/AccessibilityContext';
+import { ContrastToggle } from '../components/accessibility/ContrastToggle';
+import { LANGUAGE_LIST } from '../context/translations';
 import type { TextSize, VoiceSpeed } from '../types/types';
 import {
   getGeminiApiKey,
@@ -35,13 +38,6 @@ import {
   askMira,
   speakMira,
 } from '../services/geminiService';
-
-const LANGUAGE_OPTIONS = [
-  { code: 'en', label: 'English', region: 'Universal' },
-  { code: 'as', label: 'অসমীয়া (Assamese)', region: 'Assam' },
-  { code: 'bn', label: 'বাংলা (Bengali)', region: 'Tripura / Barak' },
-  { code: 'hi', label: 'हिंदी (Hindi)', region: 'Universal' },
-];
 
 const GEMINI_MODELS = [
   { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Recommended - Fast & Warm)' },
@@ -55,7 +51,6 @@ export function SettingsScreen() {
   const {
     settings,
     setTextSize,
-    setContrastMode,
     setVoiceSpeed,
     setVoiceGender,
     setReducedMotion,
@@ -74,8 +69,12 @@ export function SettingsScreen() {
 
   // Patient & caregiver profile state
   const [patientName, setPatientName] = useState('Arun');
+  const [initialPatientName, setInitialPatientName] = useState('Arun');
+  const [patientNameError, setPatientNameError] = useState<string | null>(null);
   const [caregiverName, setCaregiverName] = useState('Priya');
+  const [initialCaregiverName, setInitialCaregiverName] = useState('Priya');
   const [caregiverPhone, setCaregiverPhone] = useState('+91 98765 43210');
+  const [initialCaregiverPhone, setInitialCaregiverPhone] = useState('+91 98765 43210');
 
   // Toasts
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -85,14 +84,46 @@ export function SettingsScreen() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
 
+  // Language search filter
+  const [langSearch, setLangSearch] = useState('');
+
   useEffect(() => {
     setApiKey(getGeminiApiKey());
     setSelectedModel(getGeminiModel());
 
     const profile = getPatientProfile();
-    setPatientName(profile.name || 'Arun');
-    setCaregiverName(profile.caregiverName || 'Priya');
-    setCaregiverPhone(profile.caregiverPhone || '+91 98765 43210');
+    const pName = profile.name || 'Arun';
+    const cName = profile.caregiverName || 'Priya';
+    const cPhone = profile.caregiverPhone || '+91 98765 43210';
+
+    setPatientName(pName);
+    setInitialPatientName(pName);
+    setCaregiverName(cName);
+    setInitialCaregiverName(cName);
+    setCaregiverPhone(cPhone);
+    setInitialCaregiverPhone(cPhone);
+
+    // Fetch from backend profile endpoint if available
+    fetch('/api/patient/profile')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.profile) {
+          const bp = data.profile;
+          if (bp.display_name) {
+            setPatientName(bp.display_name);
+            setInitialPatientName(bp.display_name);
+          }
+          if (bp.caregiver_name) {
+            setCaregiverName(bp.caregiver_name);
+            setInitialCaregiverName(bp.caregiver_name);
+          }
+          if (bp.caregiver_phone) {
+            setCaregiverPhone(bp.caregiver_phone);
+            setInitialCaregiverPhone(bp.caregiver_phone);
+          }
+        }
+      })
+      .catch(() => {});
 
     // Check if app is installed in standalone mode
     if (window.matchMedia('(display-mode: standalone)').matches) {
@@ -121,13 +152,62 @@ export function SettingsScreen() {
   };
 
   const handleSaveProfile = () => {
-    savePatientProfile({
-      name: patientName.trim() || 'Arun',
+    const cleanName = patientName.trim();
+    if (!cleanName) {
+      setPatientNameError('Patient name cannot be blank. Please enter a valid name.');
+      return;
+    }
+    if (cleanName.length > 50) {
+      setPatientNameError('Patient name is too long (maximum 50 characters).');
+      return;
+    }
+    setPatientNameError(null);
+
+    const updatedProfile = {
+      name: cleanName,
       caregiverName: caregiverName.trim() || 'Priya',
       caregiverPhone: caregiverPhone.trim() || '+91 98765 43210',
-    });
-    showToast('Patient & caregiver profile updated!');
+    };
+
+    // Save locally
+    savePatientProfile(updatedProfile);
+    setInitialPatientName(cleanName);
+    setInitialCaregiverName(updatedProfile.caregiverName);
+    setInitialCaregiverPhone(updatedProfile.caregiverPhone);
+
+    // Sync to backend
+    fetch('/api/patient/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        display_name: cleanName,
+        caregiver_name: updatedProfile.caregiverName,
+        caregiver_phone: updatedProfile.caregiverPhone,
+      }),
+    }).catch(() => {});
+
+    // Broadcast change across app components (PatientHomeScreen, Greetings, Mira)
+    window.dispatchEvent(
+      new CustomEvent('cogniva_patient_updated', {
+        detail: updatedProfile,
+      })
+    );
+
+    showToast(`Patient name updated to "${cleanName}"!`);
   };
+
+  const handleCancelProfile = () => {
+    setPatientName(initialPatientName);
+    setCaregiverName(initialCaregiverName);
+    setCaregiverPhone(initialCaregiverPhone);
+    setPatientNameError(null);
+    showToast('Changes discarded.');
+  };
+
+  const hasProfileChanges =
+    patientName !== initialPatientName ||
+    caregiverName !== initialCaregiverName ||
+    caregiverPhone !== initialCaregiverPhone;
 
   const handleTestMira = async () => {
     if (!testQuery.trim()) return;
@@ -166,9 +246,16 @@ export function SettingsScreen() {
     }
   };
 
+  const filteredLanguages = LANGUAGE_LIST.filter(
+    (l) =>
+      l.name.toLowerCase().includes(langSearch.toLowerCase()) ||
+      l.nativeName.toLowerCase().includes(langSearch.toLowerCase()) ||
+      l.region.toLowerCase().includes(langSearch.toLowerCase())
+  );
+
   return (
     <div
-      className="min-h-screen w-full flex flex-col pb-28"
+      className="min-h-screen w-full flex flex-col"
       style={{ background: 'rgb(var(--color-surface-bg))' }}
     >
       {/* Toast Notification */}
@@ -178,10 +265,10 @@ export function SettingsScreen() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-2xl bg-emerald-600 text-white font-bold text-sm shadow-xl flex items-center gap-2"
+            className="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-2xl bg-emerald-600 text-white font-bold text-sm shadow-xl flex items-center gap-2 max-w-[90vw]"
           >
-            <CheckCircle2 className="w-5 h-5" />
-            {toastMessage}
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            <span>{toastMessage}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -336,7 +423,7 @@ export function SettingsScreen() {
           </div>
         </section>
 
-        {/* ── SECTION 2: PATIENT & CAREGIVER PROFILE ──────────────────────────── */}
+        {/* ── SECTION 2: EDITABLE PATIENT & CAREGIVER PROFILE ─────────────────── */}
         <section className="p-6 rounded-3xl border border-[rgba(var(--color-text-primary),0.12)] bg-[rgb(var(--color-surface-card))] space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/15 flex items-center justify-center text-amber-600 dark:text-amber-400">
@@ -344,27 +431,48 @@ export function SettingsScreen() {
             </div>
             <div>
               <h2 className="font-bold text-[rgb(var(--color-text-primary))]" style={{ fontSize: 'var(--text-lg)' }}>
-                Patient & Caregiver Info
+                Patient Identity & Caregiver Info
               </h2>
               <p className="text-xs text-[rgb(var(--color-text-secondary))]">
-                Used in daily greetings & emergency assistance
+                Editable patient name used in daily greetings, games, and MIRA AI
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Editable Patient Display Name */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[rgb(var(--color-text-secondary))]">
-                Patient First Name
+              <label className="text-xs font-bold text-[rgb(var(--color-text-secondary))] flex items-center justify-between">
+                <span>Patient Display Name *</span>
+                {patientName !== initialPatientName && (
+                  <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold">
+                    (Modified)
+                  </span>
+                )}
               </label>
               <input
                 type="text"
                 value={patientName}
-                onChange={(e) => setPatientName(e.target.value)}
+                onChange={(e) => {
+                  setPatientName(e.target.value);
+                  if (patientNameError) setPatientNameError(null);
+                }}
                 placeholder="e.g. Arun"
-                className="w-full px-4 py-3 rounded-2xl border border-[rgba(var(--color-text-primary),0.15)] bg-[rgb(var(--color-surface-bg))] text-[rgb(var(--color-text-primary))] text-base outline-none"
+                className={`w-full px-4 py-3 rounded-2xl border-2 bg-[rgb(var(--color-surface-bg))] text-[rgb(var(--color-text-primary))] text-base outline-none transition-colors ${
+                  patientNameError
+                    ? 'border-rose-500 focus:border-rose-600'
+                    : 'border-[rgba(var(--color-text-primary),0.15)] focus:border-[rgb(var(--color-primary))]'
+                }`}
               />
+              {patientNameError && (
+                <p className="text-xs text-rose-500 font-semibold flex items-center gap-1 pt-0.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {patientNameError}
+                </p>
+              )}
             </div>
+
+            {/* Primary Caregiver Name */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-[rgb(var(--color-text-secondary))]">
                 Primary Caregiver Name
@@ -374,7 +482,7 @@ export function SettingsScreen() {
                 value={caregiverName}
                 onChange={(e) => setCaregiverName(e.target.value)}
                 placeholder="e.g. Priya"
-                className="w-full px-4 py-3 rounded-2xl border border-[rgba(var(--color-text-primary),0.15)] bg-[rgb(var(--color-surface-bg))] text-[rgb(var(--color-text-primary))] text-base outline-none"
+                className="w-full px-4 py-3 rounded-2xl border-2 border-[rgba(var(--color-text-primary),0.15)] focus:border-[rgb(var(--color-primary))] bg-[rgb(var(--color-surface-bg))] text-[rgb(var(--color-text-primary))] text-base outline-none transition-colors"
               />
             </div>
           </div>
@@ -388,19 +496,32 @@ export function SettingsScreen() {
               value={caregiverPhone}
               onChange={(e) => setCaregiverPhone(e.target.value)}
               placeholder="e.g. +91 98765 43210"
-              className="w-full px-4 py-3 rounded-2xl border border-[rgba(var(--color-text-primary),0.15)] bg-[rgb(var(--color-surface-bg))] text-[rgb(var(--color-text-primary))] text-base outline-none"
+              className="w-full px-4 py-3 rounded-2xl border-2 border-[rgba(var(--color-text-primary),0.15)] focus:border-[rgb(var(--color-primary))] bg-[rgb(var(--color-surface-bg))] text-[rgb(var(--color-text-primary))] text-base outline-none transition-colors"
             />
           </div>
 
-          <button
-            onClick={handleSaveProfile}
-            className="w-full py-3.5 rounded-2xl font-bold border-2 border-[rgb(var(--color-primary))] text-[rgb(var(--color-primary))] hover:bg-[rgba(var(--color-primary),0.06)] active:scale-98 transition-all"
-          >
-            Save Profile
-          </button>
+          {/* Save & Cancel Controls */}
+          <div className="flex gap-3 pt-2">
+            {hasProfileChanges && (
+              <button
+                type="button"
+                onClick={handleCancelProfile}
+                className="px-5 py-3.5 rounded-2xl font-bold border border-[rgba(var(--color-text-primary),0.2)] text-[rgb(var(--color-text-secondary))] hover:bg-[rgba(var(--color-text-primary),0.05)] active:scale-98 transition-all flex items-center justify-center gap-1.5"
+              >
+                <X className="w-4 h-4" /> Cancel
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveProfile}
+              className="flex-1 py-3.5 rounded-2xl font-bold bg-[rgb(var(--color-primary))] text-white shadow-md active:scale-98 transition-all hover:opacity-95 flex items-center justify-center gap-2"
+            >
+              <Save className="w-4 h-4" /> Save Patient Profile
+            </button>
+          </div>
         </section>
 
-        {/* ── SECTION 3: ACCESSIBILITY & VISUAL COMFORT ────────────────────────── */}
+        {/* ── SECTION 3: ACCESSIBILITY & VISUAL COMFORT (THEMES) ───────────────── */}
         <section className="p-6 rounded-3xl border border-[rgba(var(--color-text-primary),0.12)] bg-[rgb(var(--color-surface-card))] space-y-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
@@ -411,8 +532,26 @@ export function SettingsScreen() {
                 Dementia Readability & Visual Comfort
               </h2>
               <p className="text-xs text-[rgb(var(--color-text-secondary))]">
-                Tailored font sizing and high contrast
+                Tailored font sizing, light/dark/system themes, and high contrast
               </p>
+            </div>
+          </div>
+
+          {/* Theme Mode Toggle (Compact, Centered, 3-Option) */}
+          <div className="space-y-2.5">
+            <label className="text-sm font-bold text-[rgb(var(--color-text-primary))]">
+              Theme & Contrast (Light / Dark / System)
+            </label>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-[rgba(var(--color-text-primary),0.1)] bg-[rgb(var(--color-surface-bg))] gap-3">
+              <div>
+                <p className="text-xs font-bold text-[rgb(var(--color-text-primary))]">
+                  Color Appearance
+                </p>
+                <p className="text-[11px] text-[rgb(var(--color-text-secondary))]">
+                  Follows OS preferences or select explicit theme
+                </p>
+              </div>
+              <ContrastToggle />
             </div>
           </div>
 
@@ -446,35 +585,6 @@ export function SettingsScreen() {
             </div>
           </div>
 
-          {/* Contrast Mode */}
-          <div className="space-y-2.5">
-            <label className="text-sm font-bold text-[rgb(var(--color-text-primary))]">
-              Contrast & Theme
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setContrastMode('standard')}
-                className={`py-3.5 px-4 rounded-2xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                  settings.contrastMode === 'standard'
-                    ? 'border-[rgb(var(--color-primary))] bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))] font-bold'
-                    : 'border-[rgba(var(--color-text-primary),0.12)] text-[rgb(var(--color-text-secondary))]'
-                }`}
-              >
-                <Sun className="w-5 h-5" /> Standard Warm
-              </button>
-              <button
-                onClick={() => setContrastMode('high-contrast')}
-                className={`py-3.5 px-4 rounded-2xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                  settings.contrastMode === 'high-contrast'
-                    ? 'border-[rgb(var(--color-primary))] bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))] font-bold'
-                    : 'border-[rgba(var(--color-text-primary),0.12)] text-[rgb(var(--color-text-secondary))]'
-                }`}
-              >
-                <Moon className="w-5 h-5" /> High Contrast
-              </button>
-            </div>
-          </div>
-
           {/* Reduced Motion */}
           <div className="flex items-center justify-between p-4 rounded-2xl border border-[rgba(var(--color-text-primary),0.1)] bg-[rgb(var(--color-surface-bg))]">
             <div>
@@ -486,16 +596,20 @@ export function SettingsScreen() {
               </p>
             </div>
             <button
+              type="button"
               onClick={() => setReducedMotion(!settings.reducedMotion)}
               role="switch"
               aria-checked={settings.reducedMotion}
-              className={`w-11 h-6 rounded-full relative transition-colors duration-200 ${
+              aria-label="Toggle reduced motion"
+              data-compact="true"
+              className={`w-12 h-7 rounded-full relative flex-shrink-0 transition-colors duration-200 inline-flex items-center p-0.5 focus:outline-none focus:ring-2 focus:ring-[rgb(var(--color-primary))] active:scale-95 ${
                 settings.reducedMotion ? 'bg-[rgb(var(--color-primary))]' : 'bg-neutral-300 dark:bg-neutral-700'
               }`}
+              style={{ minHeight: '28px', height: '28px', width: '48px' }}
             >
-              <div
-                className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform duration-200 ${
-                  settings.reducedMotion ? 'translate-x-6' : 'translate-x-1'
+              <span
+                className={`w-6 h-6 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${
+                  settings.reducedMotion ? 'translate-x-5' : 'translate-x-0'
                 }`}
               />
             </button>
@@ -536,16 +650,20 @@ export function SettingsScreen() {
               </div>
             </div>
             <button
+              type="button"
               onClick={() => setSoundEnabled(!settings.soundEnabled)}
               role="switch"
               aria-checked={settings.soundEnabled}
-              className={`w-11 h-6 rounded-full relative transition-colors duration-200 ${
+              aria-label="Toggle sound and voice guidance"
+              data-compact="true"
+              className={`w-12 h-7 rounded-full relative flex-shrink-0 transition-colors duration-200 inline-flex items-center p-0.5 focus:outline-none focus:ring-2 focus:ring-[rgb(var(--color-primary))] active:scale-95 ${
                 settings.soundEnabled ? 'bg-[rgb(var(--color-primary))]' : 'bg-neutral-300 dark:bg-neutral-700'
               }`}
+              style={{ minHeight: '28px', height: '28px', width: '48px' }}
             >
-              <div
-                className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform duration-200 ${
-                  settings.soundEnabled ? 'translate-x-6' : 'translate-x-1'
+              <span
+                className={`w-6 h-6 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${
+                  settings.soundEnabled ? 'translate-x-5' : 'translate-x-0'
                 }`}
               />
             </button>
@@ -613,40 +731,61 @@ export function SettingsScreen() {
           </div>
         </section>
 
-        {/* ── SECTION 5: LANGUAGE (NORTH EAST FOCUS) ───────────────────────────── */}
+        {/* ── SECTION 5: COMPREHENSIVE LANGUAGE SUPPORT (20 LANGUAGES) ────────── */}
         <section className="p-6 rounded-3xl border border-[rgba(var(--color-text-primary),0.12)] bg-[rgb(var(--color-surface-card))] space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/15 flex items-center justify-center text-rose-600 dark:text-rose-400">
-              <Globe className="w-6 h-6" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/15 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                <Globe className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="font-bold text-[rgb(var(--color-text-primary))]" style={{ fontSize: 'var(--text-lg)' }}>
+                  Language & Locale (20 Languages)
+                </h2>
+                <p className="text-xs text-[rgb(var(--color-text-secondary))]">
+                  Indian regional (Assamese, Hindi, Bengali, etc.) & International with RTL support
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-bold text-[rgb(var(--color-text-primary))]" style={{ fontSize: 'var(--text-lg)' }}>
-                Language & Region (NER)
-              </h2>
-              <p className="text-xs text-[rgb(var(--color-text-secondary))]">
-                North-Eastern languages and English
-              </p>
-            </div>
+            <span className="text-xs font-bold px-3 py-1 rounded-full bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]">
+              {LANGUAGE_LIST.length} Available
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {LANGUAGE_OPTIONS.map(({ code, label, region }) => {
+          {/* Quick Search */}
+          <input
+            type="text"
+            value={langSearch}
+            onChange={(e) => setLangSearch(e.target.value)}
+            placeholder="Search language or script..."
+            className="w-full px-4 py-2.5 rounded-xl border border-[rgba(var(--color-text-primary),0.15)] bg-[rgb(var(--color-surface-bg))] text-xs text-[rgb(var(--color-text-primary))] outline-none"
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+            {filteredLanguages.map(({ code, name, nativeName, region, dir }) => {
               const isSelected = settings.languageCode === code;
               return (
                 <button
                   key={code}
-                  onClick={() => setLanguageCode(code)}
-                  className={`p-4 rounded-2xl border-2 text-left flex items-center justify-between transition-all active:scale-95 ${
+                  onClick={() => {
+                    setLanguageCode(code);
+                    showToast(`Language switched to ${name} (${nativeName})`);
+                  }}
+                  className={`p-3.5 rounded-2xl border-2 text-left flex items-center justify-between transition-all active:scale-95 ${
                     isSelected
-                      ? 'border-[rgb(var(--color-primary))] bg-[rgba(var(--color-primary),0.08)] text-[rgb(var(--color-primary))] font-bold'
-                      : 'border-[rgba(var(--color-text-primary),0.12)] text-[rgb(var(--color-text-secondary))]'
+                      ? 'border-[rgb(var(--color-primary))] bg-[rgba(var(--color-primary),0.08)] text-[rgb(var(--color-primary))] font-bold shadow-sm'
+                      : 'border-[rgba(var(--color-text-primary),0.12)] text-[rgb(var(--color-text-secondary))] hover:border-[rgba(var(--color-text-primary),0.25)]'
                   }`}
                 >
-                  <div>
-                    <p className="text-sm font-bold text-[rgb(var(--color-text-primary))]">{label}</p>
-                    <p className="text-xs opacity-70">{region}</p>
+                  <div className="min-w-0 pr-2">
+                    <p className="text-sm font-bold text-[rgb(var(--color-text-primary))] truncate">
+                      {nativeName} <span className="text-xs font-normal opacity-70">({name})</span>
+                    </p>
+                    <p className="text-[11px] opacity-70 truncate">
+                      {region} {dir === 'rtl' ? '• RTL' : ''}
+                    </p>
                   </div>
-                  {isSelected && <CheckCircle2 className="w-5 h-5 text-[rgb(var(--color-primary))]" />}
+                  {isSelected && <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-[rgb(var(--color-primary))]" />}
                 </button>
               );
             })}
@@ -695,15 +834,12 @@ export function SettingsScreen() {
           </button>
         </div>
 
-      </main>
-
-      {/* Back to Home — Large bottom button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[rgba(var(--color-surface-bg),0.96)] backdrop-blur-md border-t border-[rgba(var(--color-text-primary),0.08)] z-30">
-        <div className="max-w-2xl mx-auto">
+        {/* ── BACK TO HOME — In-flow button safely above bottom navigation ─────── */}
+        <div className="pt-4 pb-12">
           <motion.button
             onClick={() => navigate('/')}
             whileTap={{ scale: 0.97 }}
-            className="w-full h-16 rounded-2xl font-bold text-white flex items-center justify-center gap-2 shadow-lg transition-all"
+            className="w-full h-16 rounded-2xl font-bold text-white flex items-center justify-center gap-2 shadow-lg transition-all active:opacity-90"
             style={{
               background: 'rgb(var(--color-primary))',
               fontSize: 'var(--text-lg)',
@@ -712,7 +848,8 @@ export function SettingsScreen() {
             <ArrowLeft className="w-6 h-6" /> Back to Home
           </motion.button>
         </div>
-      </div>
+
+      </main>
     </div>
   );
 }

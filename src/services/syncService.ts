@@ -14,6 +14,7 @@
  */
 
 import { getSessions, markSynced, getUnsyncedCount, type GameSession } from '../utils/storage';
+import { ALL_GAMES } from '../utils/gameRegistry';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -184,12 +185,21 @@ export interface GameStats {
   raw_errors: number[];
   moving_avg_time: number[];
   moving_avg_errors: number[];
+  session_count: number;
+  avg_time?: number;
+  avg_errors?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  latest_session?: any;
 }
 
 export interface AnalyticsData {
   attention_needed: boolean;
-  MEMORY_MATCH: GameStats;
-  DAILY_SEQUENCE: GameStats;
+  role?: string;
+  scope?: string;
+  session_count?: number;
+  games?: Record<string, GameStats>;
+  registered_games?: string[];
+  radar_scores?: Array<{ domain: string; score: number; module: string; description?: string }>;
   [key: string]: unknown;
 }
 
@@ -199,6 +209,10 @@ const EMPTY_GAME_STATS: GameStats = {
   raw_errors: [],
   moving_avg_time: [],
   moving_avg_errors: [],
+  session_count: 0,
+  avg_time: 0,
+  avg_errors: 0,
+  latest_session: null,
 };
 
 function computeMovingAvg(values: number[], windowSize: number = 3): number[] {
@@ -222,15 +236,15 @@ function formatSessionLabel(timestamp: string | number): string {
 
 export function computeLocalAnalytics(): AnalyticsData {
   const allSessions = getSessions();
-  const mmSessions = allSessions.filter(s => s.game === 'MEMORY_MATCH').slice(-10);
-  const dsSessions = allSessions.filter(s => s.game === 'DAILY_SEQUENCE').slice(-10);
-
   const buildStats = (sessions: GameSession[]): GameStats => {
     if (sessions.length === 0) return EMPTY_GAME_STATS;
 
-    const labels = sessions.map(s => formatSessionLabel(s.id));
-    const raw_time = sessions.map(s => s.time_taken_sec);
-    const raw_errors = sessions.map(s => s.error_count);
+    const ordered = [...sessions].reverse().slice(-10);
+    const labels = ordered.map(s => formatSessionLabel(s.id));
+    const raw_time = ordered.map(s => s.time_taken_sec);
+    const raw_errors = ordered.map(s => s.error_count);
+    const avg_time = raw_time.length ? Number((raw_time.reduce((a, b) => a + b, 0) / raw_time.length).toFixed(1)) : 0;
+    const avg_errors = raw_errors.length ? Number((raw_errors.reduce((a, b) => a + b, 0) / raw_errors.length).toFixed(1)) : 0;
 
     return {
       labels,
@@ -238,23 +252,44 @@ export function computeLocalAnalytics(): AnalyticsData {
       raw_errors,
       moving_avg_time: computeMovingAvg(raw_time),
       moving_avg_errors: computeMovingAvg(raw_errors),
+      session_count: sessions.length,
+      avg_time,
+      avg_errors,
+      latest_session: sessions[sessions.length - 1] || null,
     };
   };
 
-  const mmStats = buildStats(mmSessions);
-  const dsStats = buildStats(dsSessions);
+  const gamesMap: Record<string, GameStats> = {};
+  for (const game of ALL_GAMES) {
+    const matched = allSessions.filter(s => s.game === game.id);
+    gamesMap[game.id] = buildStats(matched);
+  }
 
+  // Also include any other game keys present in stored sessions
+  const dynamicGameIds = new Set(allSessions.map(s => s.game));
+  for (const gid of dynamicGameIds) {
+    if (gid && !gamesMap[gid]) {
+      const matched = allSessions.filter(s => s.game === gid);
+      gamesMap[gid] = buildStats(matched);
+    }
+  }
+
+  const mmStats = gamesMap['MEMORY_MATCH'] || EMPTY_GAME_STATS;
   const recentErrors = mmStats.raw_errors.slice(-3);
   const attention_needed =
     recentErrors.length === 3 &&
     recentErrors[2] > recentErrors[1] &&
     recentErrors[1] > recentErrors[0];
 
-  return {
+  const payload: AnalyticsData = {
     attention_needed,
-    MEMORY_MATCH: mmStats,
-    DAILY_SEQUENCE: dsStats,
+    session_count: allSessions.length,
+    games: gamesMap,
+    registered_games: ALL_GAMES.map(g => g.id),
+    ...gamesMap,
   };
+
+  return payload;
 }
 
 export async function fetchAnalytics(): Promise<AnalyticsData> {

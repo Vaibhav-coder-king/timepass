@@ -5,13 +5,14 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import type { AccessibilitySettings, ContrastMode, TextSize, VoiceSpeed, VoiceGender } from '../types/types';
+import type { AccessibilitySettings, ContrastMode, ThemeMode, TextSize, VoiceSpeed, VoiceGender } from '../types/types';
 
 // ─── Default Settings ───────────────────────────────────────────────────────
 
 const DEFAULT_SETTINGS: AccessibilitySettings = {
   textSize: 'large',          // Default to large for elderly users
   contrastMode: 'standard',
+  themeMode: 'system',        // Follow OS theme by default
   voiceSpeed: 'normal',
   voiceGender: 'female',      // Default to warm female voice for MIRA
   reducedMotion: false,
@@ -27,6 +28,7 @@ interface AccessibilityContextValue {
   settings: AccessibilitySettings;
   setTextSize: (size: TextSize) => void;
   setContrastMode: (mode: ContrastMode) => void;
+  setThemeMode: (mode: ThemeMode) => void;
   setVoiceSpeed: (speed: VoiceSpeed) => void;
   setVoiceGender: (gender: VoiceGender) => void;
   setReducedMotion: (value: boolean) => void;
@@ -51,7 +53,7 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
     }
   });
 
-  // Apply CSS variable overrides to <html> whenever settings change
+  // Apply CSS attributes and theme class to <html>
   useEffect(() => {
     const html = document.documentElement;
     html.setAttribute('data-text-size', settings.textSize);
@@ -59,11 +61,32 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
     html.setAttribute('data-reduced-motion', String(settings.reducedMotion));
     html.setAttribute('lang', settings.languageCode);
 
-    // Toggle dark class for Tailwind dark mode styling
-    if (settings.contrastMode === 'high-contrast') {
-      html.classList.add('dark');
+    const applyTheme = (isDark: boolean) => {
+      if (isDark) {
+        html.classList.add('dark');
+        html.setAttribute('data-theme', 'dark');
+      } else {
+        html.classList.remove('dark');
+        html.setAttribute('data-theme', 'light');
+      }
+    };
+
+    const mode = settings.themeMode || 'system';
+
+    if (mode === 'dark') {
+      applyTheme(true);
+    } else if (mode === 'light') {
+      applyTheme(false);
     } else {
-      html.classList.remove('dark');
+      // System mode: query OS preferences and react to changes
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      applyTheme(mq.matches);
+
+      const handler = (e: MediaQueryListEvent) => {
+        applyTheme(e.matches);
+      };
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
     }
 
     // Persist to localStorage
@@ -93,6 +116,10 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
 
   const setContrastMode = useCallback((contrastMode: ContrastMode) => {
     setSettings(prev => ({ ...prev, contrastMode }));
+  }, []);
+
+  const setThemeMode = useCallback((themeMode: ThemeMode) => {
+    setSettings(prev => ({ ...prev, themeMode }));
   }, []);
 
   const setVoiceSpeed = useCallback((voiceSpeed: VoiceSpeed) => {
@@ -125,6 +152,7 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
         settings,
         setTextSize,
         setContrastMode,
+        setThemeMode,
         setVoiceSpeed,
         setVoiceGender,
         setReducedMotion,

@@ -12,18 +12,12 @@ interface AccessibilityPanelProps {
   onClose: () => void;
 }
 
-const LANGUAGE_OPTIONS = [
-  { code: 'en', label: 'English' },
-  { code: 'hi', label: 'हिंदी (Hindi)' },
-  { code: 'as', label: 'অসমীয়া (Assamese)' },
-  { code: 'bn', label: 'বাংলা (Bengali)' },
-  { code: 'ta', label: 'தமிழ் (Tamil)' },
-  { code: 'te', label: 'తెలుగు (Telugu)' },
-  { code: 'kn', label: 'ಕನ್ನಡ (Kannada)' },
-  { code: 'ml', label: 'മലയാളം (Malayalam)' },
-  { code: 'gu', label: 'ગુજરાતી (Gujarati)' },
-  { code: 'mr', label: 'मराठी (Marathi)' },
-];
+import { LANGUAGE_LIST } from '../../context/translations';
+
+const LANGUAGE_OPTIONS = LANGUAGE_LIST.map(l => ({
+  code: l.code,
+  label: `${l.nativeName} (${l.name})`,
+}));
 
 export function AccessibilityPanel({ isOpen, onClose }: AccessibilityPanelProps) {
   const navigate = useNavigate();
@@ -151,13 +145,15 @@ export function AccessibilityPanel({ isOpen, onClose }: AccessibilityPanelProps)
                   {/* Compact toggle switch */}
                   <div
                     aria-hidden="true"
-                    className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-300 ${
-                      settings.soundEnabled ? 'bg-[rgb(var(--color-primary))]' : 'bg-[rgba(var(--color-text-primary),0.2)]'
+                    data-compact="true"
+                    className={`relative flex-shrink-0 w-12 h-7 rounded-full inline-flex items-center p-0.5 transition-colors duration-200 ${
+                      settings.soundEnabled ? 'bg-[rgb(var(--color-primary))]' : 'bg-neutral-300 dark:bg-neutral-700'
                     }`}
+                    style={{ minHeight: '28px', height: '28px', width: '48px' }}
                   >
-                    <div
-                      className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform duration-300 ${
-                        settings.soundEnabled ? 'translate-x-6' : 'translate-x-1'
+                    <span
+                      className={`w-6 h-6 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${
+                        settings.soundEnabled ? 'translate-x-5' : 'translate-x-0'
                       }`}
                     />
                   </div>

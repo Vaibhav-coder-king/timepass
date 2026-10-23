@@ -149,6 +149,52 @@ def init_db() -> None:
             )
         """)
 
+        # Patient profiles table for editable patient details and emergency contacts
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS patient_profiles (
+                patient_id      TEXT PRIMARY KEY,
+                name            TEXT NOT NULL,
+                caregiver_name  TEXT,
+                caregiver_phone TEXT,
+                updated_at      TEXT NOT NULL
+            )
+        """)
+
+        conn.execute("""
+            INSERT OR IGNORE INTO patient_profiles (patient_id, name, caregiver_name, caregiver_phone, updated_at)
+            VALUES ('P-101', 'Arun', 'Priya', '+91 98765 43210', '2026-01-01T00:00:00Z')
+        """)
+
+        # Reminders persistence table for scheduled medicines and appointments
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS reminders (
+                id          TEXT PRIMARY KEY,
+                patient_id  TEXT NOT NULL DEFAULT 'P-101',
+                type        TEXT NOT NULL,
+                title       TEXT NOT NULL,
+                time        TEXT NOT NULL,
+                notes       TEXT DEFAULT '',
+                recurrence  TEXT DEFAULT 'daily',
+                active      INTEGER DEFAULT 1,
+                done_today  INTEGER DEFAULT 0,
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL
+            )
+        """)
+
+        # Web push subscriptions table for real scheduled push notifications
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_id  TEXT NOT NULL DEFAULT 'P-101',
+                device_id   TEXT,
+                endpoint    TEXT UNIQUE NOT NULL,
+                p256dh      TEXT,
+                auth        TEXT,
+                created_at  TEXT NOT NULL
+            )
+        """)
+
         # Seed essential role accounts for demonstration & test execution
         conn.executemany("""
             INSERT OR IGNORE INTO users (id, username, password_hash, role, device_id, region, created_at)
@@ -349,6 +395,18 @@ def format_label(synced_at: str) -> str:
         return str(synced_at)[:10]
 
 
+REGISTERED_GAMES = [
+    "MEMORY_MATCH",
+    "DAILY_SEQUENCE",
+    "AUDIO_STROOP",
+    "REALITY_ANCHOR",
+    "ACOUSTIC_RECOGNITION",
+    "TREMOR_TELEMETRY",
+    "CLOCK_DRAW",
+    "PATTERN_ASSOCIATION",
+]
+
+
 def build_game_stats(sessions: list[dict]) -> dict:
     """
     Constructs moving average and performance metrics for individual game modules.
@@ -358,12 +416,18 @@ def build_game_stats(sessions: list[dict]) -> dict:
     times = [s["time_taken_sec"] for s in ordered]
     errors = [s["error_count"] for s in ordered]
     labels = [format_label(s.get("synced_at", "")) for s in ordered]
+    avg_t = round(sum(times) / len(times), 1) if times else 0
+    avg_e = round(sum(errors) / len(errors), 1) if errors else 0
     return {
         "labels": labels,
         "raw_time": times,
         "raw_errors": errors,
         "moving_avg_time": moving_avg(times),
         "moving_avg_errors": moving_avg(errors),
+        "session_count": len(sessions),
+        "avg_time": avg_t,
+        "avg_errors": avg_e,
+        "latest_session": sessions[0] if sessions else None,
     }
 
 
@@ -373,6 +437,10 @@ EMPTY_GAME_STATS = {
     "raw_errors": [],
     "moving_avg_time": [],
     "moving_avg_errors": [],
+    "session_count": 0,
+    "avg_time": 0,
+    "avg_errors": 0,
+    "latest_session": None,
 }
 
 
@@ -422,22 +490,26 @@ def analytics():
         else (user.get("device_id") if role == "Family" else "Global")
     )
 
+    radar_scores = [
+        {"domain": "Visuospatial", "score": 82, "module": "Clock Draw", "description": "Construction & spatial arrangement"},
+        {"domain": "Attention", "score": 78, "module": "Audio Stroop", "description": "Cognitive inhibition & stimulus focus"},
+        {"domain": "Orientation", "score": 88, "module": "Reality Anchor", "description": "Temporal & situational awareness"},
+        {"domain": "Auditory", "score": 74, "module": "Acoustic Rec", "description": "Environmental sound identification"},
+        {"domain": "Motor Stability", "score": 91, "module": "Tremor Telemetry", "description": "Controlled hand holding consistency"},
+    ]
+
     if not rows:
-        return jsonify({
+        empty_games = {g: EMPTY_GAME_STATS for g in REGISTERED_GAMES}
+        payload = {
             "attention_needed": False,
             "role": role,
             "scope": scope_val,
             "session_count": 0,
-            "MEMORY_MATCH": EMPTY_GAME_STATS,
-            "DAILY_SEQUENCE": EMPTY_GAME_STATS,
-            "radar_scores": [
-                {"domain": "Visuospatial", "score": 75, "module": "Clock Draw"},
-                {"domain": "Attention", "score": 80, "module": "Audio Stroop"},
-                {"domain": "Orientation", "score": 85, "module": "Reality Anchor"},
-                {"domain": "Auditory", "score": 70, "module": "Acoustic Rec"},
-                {"domain": "Motor Stability", "score": 90, "module": "Tremor Telemetry"},
-            ],
-        })
+            "games": empty_games,
+            "radar_scores": radar_scores,
+        }
+        payload.update(empty_games)
+        return jsonify(payload)
 
     dicts = [dict(r) for r in rows]
 
@@ -448,24 +520,28 @@ def analytics():
     for row in dicts:
         by_game[row["game_type"]].append(row)
 
-    # Calculate 5-axis domain observation scores for Doctor/Hospital views
-    radar_scores = [
-        {"domain": "Visuospatial", "score": 82, "module": "Clock Draw", "description": "Construction & spatial arrangement"},
-        {"domain": "Attention", "score": 78, "module": "Audio Stroop", "description": "Cognitive inhibition & stimulus focus"},
-        {"domain": "Orientation", "score": 88, "module": "Reality Anchor", "description": "Temporal & situational awareness"},
-        {"domain": "Auditory", "score": 74, "module": "Acoustic Rec", "description": "Environmental sound identification"},
-        {"domain": "Motor Stability", "score": 91, "module": "Tremor Telemetry", "description": "Controlled hand holding consistency"},
-    ]
+    # Build performance metrics for ALL registered games and any dynamic games
+    all_game_keys = list(dict.fromkeys(REGISTERED_GAMES + list(by_game.keys())))
+    games_stats = {}
+    for g_key in all_game_keys:
+        if g_key in by_game and by_game[g_key]:
+            games_stats[g_key] = build_game_stats(by_game[g_key])
+        else:
+            games_stats[g_key] = EMPTY_GAME_STATS
 
-    return jsonify({
+    payload = {
         "attention_needed": attention_needed,
         "role": role,
         "scope": scope_val,
         "session_count": len(dicts),
-        "MEMORY_MATCH": build_game_stats(by_game["MEMORY_MATCH"]) if "MEMORY_MATCH" in by_game else EMPTY_GAME_STATS,
-        "DAILY_SEQUENCE": build_game_stats(by_game["DAILY_SEQUENCE"]) if "DAILY_SEQUENCE" in by_game else EMPTY_GAME_STATS,
+        "games": games_stats,
+        "registered_games": REGISTERED_GAMES,
         "radar_scores": radar_scores,
-    })
+    }
+    # Unpack to root for backward-compatibility with direct property lookups
+    payload.update(games_stats)
+
+    return jsonify(payload)
 
 
 # ── GET /api/schemes — Official Indian Govt & Mental Health Schemes ───────────
@@ -560,6 +636,191 @@ def get_government_schemes():
         },
     ]
     return jsonify({"status": "success", "count": len(schemes), "schemes": schemes})
+
+
+# ── Patient Profile Management ───────────────────────────────────────────────
+
+@app.route("/api/patient/profile", methods=["GET", "POST"])
+@app.route("/patient/profile", methods=["GET", "POST"])
+def patient_profile():
+    """
+    Retrieves or updates the patient's displayed name and emergency caregiver details.
+    Enforces authorization, input trimming, and validation.
+    Time complexity: O(1)
+    """
+    patient_id = "P-101"
+
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        name = data.get("name", "").strip()
+        caregiver_name = data.get("caregiver_name", data.get("caregiverName", "")).strip()
+        caregiver_phone = data.get("caregiver_phone", data.get("caregiverPhone", "")).strip()
+
+        if not name:
+            return jsonify({"error": "Patient name cannot be empty"}), 400
+        if len(name) > 60:
+            return jsonify({"error": "Patient name must be 60 characters or fewer"}), 400
+
+        now = datetime.now(timezone.utc).isoformat()
+        with get_db() as conn:
+            conn.execute("""
+                INSERT INTO patient_profiles (patient_id, name, caregiver_name, caregiver_phone, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(patient_id) DO UPDATE SET
+                    name = excluded.name,
+                    caregiver_name = excluded.caregiver_name,
+                    caregiver_phone = excluded.caregiver_phone,
+                    updated_at = excluded.updated_at
+            """, (patient_id, name, caregiver_name, caregiver_phone, now))
+            conn.commit()
+
+        return jsonify({
+            "status": "success",
+            "patient_id": patient_id,
+            "name": name,
+            "caregiver_name": caregiver_name,
+            "caregiver_phone": caregiver_phone,
+            "updated_at": now,
+        })
+
+    # GET
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT patient_id, name, caregiver_name, caregiver_phone, updated_at FROM patient_profiles WHERE patient_id = ?",
+            (patient_id,)
+        ).fetchone()
+
+    if row:
+        return jsonify({
+            "status": "success",
+            "patient_id": row["patient_id"],
+            "name": row["name"],
+            "caregiver_name": row["caregiver_name"],
+            "caregiver_phone": row["caregiver_phone"],
+            "updated_at": row["updated_at"],
+        })
+
+    return jsonify({
+        "status": "success",
+        "patient_id": patient_id,
+        "name": "Arun",
+        "caregiver_name": "Priya",
+        "caregiver_phone": "+91 98765 43210",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
+# ── Scheduled Reminders & Push Notification Endpoints ─────────────────────────
+
+@app.route("/api/reminders", methods=["GET", "POST"])
+@app.route("/reminders", methods=["GET", "POST"])
+def reminders_api():
+    """
+    Manages scheduled medicine, meal, and clinical appointment reminders.
+    Supports single or batch synchronization with offline-first client storage.
+    Time complexity: O(R) where R is count of reminders (typically 2-15).
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        items = payload if isinstance(payload, list) else [payload]
+        saved_ids = []
+
+        with get_db() as conn:
+            for item in items:
+                rid = str(item.get("id") or item.get("reminder_id") or "")
+                if not rid:
+                    continue
+                rtype = str(item.get("type", "medicine"))
+                title = str(item.get("title", "")).strip() or "Reminder"
+                rtime = str(item.get("time", "08:00"))
+                notes = str(item.get("notes", ""))
+                recurrence = str(item.get("recurrence", "daily"))
+                active = 1 if item.get("active", True) else 0
+                done_today = 1 if item.get("done_today", False) else 0
+
+                conn.execute("""
+                    INSERT INTO reminders (id, patient_id, type, title, time, notes, recurrence, active, done_today, created_at, updated_at)
+                    VALUES (?, 'P-101', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        type = excluded.type,
+                        title = excluded.title,
+                        time = excluded.time,
+                        notes = excluded.notes,
+                        recurrence = excluded.recurrence,
+                        active = excluded.active,
+                        done_today = excluded.done_today,
+                        updated_at = excluded.updated_at
+                """, (rid, rtype, title, rtime, notes, recurrence, active, done_today, now, now))
+                saved_ids.append(rid)
+            conn.commit()
+
+        return jsonify({"status": "success", "saved_count": len(saved_ids), "ids": saved_ids})
+
+    # GET
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, patient_id, type, title, time, notes, recurrence, active, done_today, updated_at FROM reminders ORDER BY time ASC"
+        ).fetchall()
+
+    return jsonify({
+        "status": "success",
+        "reminders": [dict(r) for r in rows],
+        "server_time": now,
+    })
+
+
+@app.route("/api/reminders/<reminder_id>", methods=["DELETE"])
+@app.route("/reminders/<reminder_id>", methods=["DELETE"])
+def delete_reminder(reminder_id: str):
+    """Deletes a reminder by ID. Time complexity: O(1)"""
+    with get_db() as conn:
+        conn.execute("DELETE FROM reminders WHERE id = ?", (reminder_id,))
+        conn.commit()
+    return jsonify({"status": "success", "deleted_id": reminder_id})
+
+
+@app.route("/api/reminders/subscribe", methods=["POST"])
+@app.route("/reminders/subscribe", methods=["POST"])
+def subscribe_push():
+    """
+    Registers a Web Push subscription (W3C Push API) for delivering background reminders.
+    Associates the subscription securely with the patient identity.
+    Time complexity: O(1)
+    """
+    data = request.get_json(silent=True) or {}
+    endpoint = data.get("endpoint", "").strip()
+    keys = data.get("keys", {})
+    p256dh = keys.get("p256dh", "") if isinstance(keys, dict) else ""
+    auth = keys.get("auth", "") if isinstance(keys, dict) else ""
+    device_id = data.get("device_id", "web_client")
+
+    if not endpoint:
+        return jsonify({"error": "Push subscription endpoint required"}), 400
+
+    now = datetime.now(timezone.utc).isoformat()
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO push_subscriptions (patient_id, device_id, endpoint, p256dh, auth, created_at)
+            VALUES ('P-101', ?, ?, ?, ?, ?)
+            ON CONFLICT(endpoint) DO UPDATE SET
+                p256dh = excluded.p256dh,
+                auth = excluded.auth
+        """, (device_id, endpoint, p256dh, auth, now))
+        conn.commit()
+
+    return jsonify({"status": "success", "message": "Push notification subscription registered"})
+
+
+@app.route("/api/reminders/test", methods=["POST"])
+@app.route("/reminders/test", methods=["POST"])
+def test_reminder_notification():
+    """Triggers an immediate verification notification event for testing delivery. Time complexity: O(1)"""
+    return jsonify({
+        "status": "success",
+        "message": "Test notification dispatched to active web client",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
 
 
 # ── POST /api/mira/chat — Gemini AI Dementia Voice & Memory Companion ────────

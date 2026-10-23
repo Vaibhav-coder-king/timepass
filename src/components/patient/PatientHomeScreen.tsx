@@ -36,14 +36,34 @@ export function PatientHomeScreen() {
     if (lockPressRef.current) clearTimeout(lockPressRef.current);
   };
 
-  // Load configured patient profile
+  // Load configured patient profile and subscribe to updates
   useEffect(() => {
-    const profile = getPatientProfile();
-    setPatient({
-      id: 'pat_cogniva_user',
-      displayName: profile.name || 'Arun',
-      preferredLanguage: 'en',
-    });
+    const updateFromProfile = () => {
+      const profile = getPatientProfile();
+      setPatient({
+        id: 'pat_cogniva_user',
+        displayName: profile.name || 'Arun',
+        preferredLanguage: 'en',
+      });
+    };
+
+    updateFromProfile();
+
+    const handlePatientUpdate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && detail.name) {
+        setPatient({
+          id: 'pat_cogniva_user',
+          displayName: detail.name,
+          preferredLanguage: 'en',
+        });
+      } else {
+        updateFromProfile();
+      }
+    };
+
+    window.addEventListener('cogniva_patient_updated', handlePatientUpdate);
+    return () => window.removeEventListener('cogniva_patient_updated', handlePatientUpdate);
   }, []);
 
   const handleCardSelect = (action: PatientActionType) => {

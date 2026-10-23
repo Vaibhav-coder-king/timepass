@@ -1,13 +1,33 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, Check, Trash2, Bell, Calendar, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Plus,
+  Check,
+  Trash2,
+  Bell,
+  Calendar,
+  X,
+  Volume2,
+  AlertTriangle,
+  CheckCircle2,
+  BellRing,
+} from 'lucide-react';
+import {
+  getNotificationPermission,
+  requestNotificationPermission,
+  sendTestNotification,
+  checkScheduledReminders,
+  syncRemindersToBackend,
+  type NotificationPermissionState,
+} from '../services/reminderNotificationService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type ReminderType = 'medicine' | 'appointment';
 
-interface Reminder {
+export interface Reminder {
   id: string;
   type: ReminderType;
   title: string;
@@ -42,9 +62,9 @@ const DEFAULT_REMINDERS: Reminder[] = [
   {
     id: uid(),
     type: 'medicine',
-    title: 'Morning Medicine',
+    title: 'Morning Medicine (Blood Pressure & Memory)',
     time: '08:00',
-    notes: '',
+    notes: 'Take with warm water after light breakfast',
     active: true,
     done_today: false,
     last_reset: getTodayStr(),
@@ -54,7 +74,7 @@ const DEFAULT_REMINDERS: Reminder[] = [
     type: 'medicine',
     title: 'Evening Medicine',
     time: '20:00',
-    notes: '',
+    notes: 'Take after dinner',
     active: true,
     done_today: false,
     last_reset: getTodayStr(),
@@ -62,9 +82,9 @@ const DEFAULT_REMINDERS: Reminder[] = [
   {
     id: uid(),
     type: 'appointment',
-    title: 'Doctor Check-up',
+    title: 'Doctor Memory Check-up',
     time: '10:00',
-    notes: 'Govt Hospital, Guwahati',
+    notes: 'Kamrup District Hospital, Guwahati',
     active: true,
     done_today: false,
     last_reset: getTodayStr(),
@@ -77,7 +97,6 @@ function loadReminders(): Reminder[] {
     if (raw) {
       const parsed = JSON.parse(raw) as Reminder[];
       const today = getTodayStr();
-      // Reset done_today if last_reset < today
       return parsed.map((r) =>
         r.last_reset < today ? { ...r, done_today: false, last_reset: today } : r
       );
@@ -89,7 +108,12 @@ function loadReminders(): Reminder[] {
 }
 
 function saveReminders(reminders: Reminder[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(reminders));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(reminders));
+    syncRemindersToBackend(reminders).catch(() => {});
+  } catch {
+    /* ignore */
+  }
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -100,8 +124,11 @@ export function RemindersScreen() {
   const [reminders, setReminders] = useState<Reminder[]>(loadReminders);
   const [showAddForm, setShowAddForm] = useState(false);
   const [currentTime, setCurrentTime] = useState(getCurrentHHMM);
+  const [permState, setPermState] = useState<NotificationPermissionState>(getNotificationPermission);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
 
-  // Pending delete: id -> tap count
+  // Pending delete: id -> timer
   const deletePending = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
@@ -110,15 +137,50 @@ export function RemindersScreen() {
   const [formTime, setFormTime] = useState('08:00');
   const [formNotes, setFormNotes] = useState('');
 
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
   useEffect(() => {
     saveReminders(reminders);
   }, [reminders]);
 
-  // Update current time every minute
+  // Periodic reminder scheduler check & clock update (every 10s)
   useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(getCurrentHHMM()), 15_000);
+    const check = () => {
+      setCurrentTime(getCurrentHHMM());
+      setPermState(getNotificationPermission());
+      checkScheduledReminders(reminders, (r) => {
+        showToast(`🔔 Reminder: ${r.title} is scheduled now!`);
+      });
+    };
+
+    check();
+    const interval = setInterval(check, 10_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [reminders]);
+
+  const handleRequestPermission = async () => {
+    const granted = await requestNotificationPermission();
+    setPermState(getNotificationPermission());
+    if (granted) {
+      showToast('Notification permission enabled! You will receive scheduled alerts.');
+    } else {
+      showToast('Notifications blocked in browser. Gentle audio chime will play instead.');
+    }
+  };
+
+  const handleTestAlert = async () => {
+    setIsTesting(true);
+    try {
+      const res = await sendTestNotification();
+      setPermState(getNotificationPermission());
+      showToast(res.message);
+    } finally {
+      setIsTesting(false);
+    }
+  };
 
   const visibleReminders = reminders
     .filter((r) => r.type === activeTab)
@@ -136,18 +198,18 @@ export function RemindersScreen() {
         r.id === id ? { ...r, done_today: true, last_reset: getTodayStr() } : r
       )
     );
+    showToast('Marked as done for today! 🌟');
   }, []);
 
   const handleDelete = useCallback((id: string) => {
     if (pendingDeleteId === id) {
-      // Second tap — actually delete
       setPendingDeleteId(null);
       const timer = deletePending.current.get(id);
       if (timer) clearTimeout(timer);
       deletePending.current.delete(id);
       setReminders((prev) => prev.filter((r) => r.id !== id));
+      showToast('Reminder deleted.');
     } else {
-      // First tap — set pending
       if (pendingDeleteId) {
         const old = deletePending.current.get(pendingDeleteId);
         if (old) clearTimeout(old);
@@ -179,211 +241,268 @@ export function RemindersScreen() {
     setFormTime('08:00');
     setFormNotes('');
     setShowAddForm(false);
+    showToast(`Added ${activeTab === 'medicine' ? 'medicine' : 'appointment'} reminder!`);
   }, [formTitle, formTime, formNotes, activeTab]);
 
   return (
     <div
+      className="min-h-screen w-full flex flex-col pb-32"
       style={{
-        minHeight: '100vh',
         backgroundColor: 'rgb(var(--color-surface-bg))',
         color: 'rgb(var(--color-text-primary))',
-        paddingBottom: '5rem',
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
-          padding: '1.25rem 1rem 0.875rem',
-          backgroundColor: 'rgb(var(--color-surface-card))',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-        }}
-      >
-        <button
-          onClick={() => navigate(-1)}
-          aria-label="Go back"
-          style={backBtnStyle}
-        >
-          <ArrowLeft size={24} />
-        </button>
-        <h1 style={{ margin: 0, fontSize: 'var(--text-xl)', fontWeight: 700, flex: 1 }}>
-          Reminders
-        </h1>
-      </div>
-
-      {/* Tabs */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '0',
-          padding: '0.75rem 1rem',
-          backgroundColor: 'rgb(var(--color-surface-card))',
-          borderBottom: '1px solid rgba(var(--color-text-primary), 0.07)',
-        }}
-      >
-        {(['medicine', 'appointment'] as TabKey[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => {
-              setActiveTab(tab);
-              setShowAddForm(false);
-            }}
-            style={{
-              flex: 1,
-              padding: '0.625rem 0.5rem',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 'var(--text-base)',
-              fontWeight: activeTab === tab ? 700 : 400,
-              borderBottom: activeTab === tab
-                ? '3px solid rgb(var(--color-primary))'
-                : '3px solid transparent',
-              backgroundColor: 'transparent',
-              color: activeTab === tab
-                ? 'rgb(var(--color-primary))'
-                : 'rgb(var(--color-text-secondary))',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            {tab === 'medicine' ? '💊 Medicines' : '📅 Appointments'}
-          </button>
-        ))}
-      </div>
-
-      {/* Reminder list */}
-      <div style={{ padding: '0.875rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        <AnimatePresence initial={false}>
-          {visibleReminders.length === 0 && (
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              style={{
-                textAlign: 'center',
-                color: 'rgb(var(--color-text-secondary))',
-                fontSize: 'var(--text-base)',
-                marginTop: '2rem',
-              }}
-            >
-              No {activeTab === 'medicine' ? 'medicines' : 'appointments'} yet. Tap + to add one!
-            </motion.p>
-          )}
-          {visibleReminders.map((r) => (
-            <ReminderCard
-              key={r.id}
-              reminder={r}
-              isDueNow={r.active && !r.done_today && r.time === currentTime}
-              isPendingDelete={pendingDeleteId === r.id}
-              onToggleActive={() => toggleActive(r.id)}
-              onMarkDone={() => markDone(r.id)}
-              onDelete={() => handleDelete(r.id)}
-            />
-          ))}
-        </AnimatePresence>
-      </div>
-
-      {/* Inline Add Form */}
+      {/* Toast Alert */}
       <AnimatePresence>
-        {showAddForm && (
+        {toastMessage && (
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 30 }}
-            transition={{ duration: 0.2 }}
-            style={{
-              margin: '0 1rem',
-              padding: '1rem',
-              backgroundColor: 'rgb(var(--color-surface-card))',
-              borderRadius: 16,
-              boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
-            }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl bg-indigo-600 text-white font-bold text-sm shadow-2xl flex items-center gap-2 max-w-[90vw]"
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-              <span style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>
-                Add {activeTab === 'medicine' ? 'Medicine 💊' : 'Appointment 📅'}
-              </span>
-              <button
-                onClick={() => setShowAddForm(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgb(var(--color-text-secondary))' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <label style={labelStyle}>Title *</label>
-            <input
-              autoFocus
-              value={formTitle}
-              onChange={(e) => setFormTitle(e.target.value)}
-              placeholder="e.g., Blood pressure pill"
-              style={inputStyle}
-            />
-
-            <label style={labelStyle}>Time</label>
-            <input
-              type="time"
-              value={formTime}
-              onChange={(e) => setFormTime(e.target.value)}
-              style={inputStyle}
-            />
-
-            <label style={labelStyle}>Notes (optional)</label>
-            <textarea
-              value={formNotes}
-              onChange={(e) => setFormNotes(e.target.value)}
-              placeholder="e.g., Take with food"
-              rows={2}
-              style={{ ...inputStyle, resize: 'none' }}
-            />
-
-            <button
-              onClick={handleSave}
-              disabled={!formTitle.trim()}
-              style={{
-                width: '100%',
-                padding: '0.875rem',
-                backgroundColor: formTitle.trim() ? 'rgb(var(--color-primary))' : 'rgba(var(--color-text-secondary), 0.3)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 12,
-                fontSize: 'var(--text-base)',
-                fontWeight: 700,
-                cursor: formTitle.trim() ? 'pointer' : 'not-allowed',
-                marginTop: '0.25rem',
-              }}
-            >
-              Save Reminder
-            </button>
+            <BellRing className="w-5 h-5 flex-shrink-0 animate-bounce" />
+            <span>{toastMessage}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* FAB */}
+      {/* Header */}
+      <header className="sticky top-0 z-20 flex items-center justify-between px-5 pt-5 pb-3 border-b border-[rgba(var(--color-text-primary),0.08)] bg-[rgba(var(--color-surface-bg),0.96)] backdrop-blur-md">
+        <button
+          onClick={() => navigate('/')}
+          aria-label="Go back to Home"
+          className="flex items-center justify-center rounded-2xl w-12 h-12 active:opacity-75 transition-all border border-[rgba(var(--color-text-primary),0.12)] bg-[rgb(var(--color-surface-card))]"
+          style={{ color: 'rgb(var(--color-text-primary))' }}
+        >
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <div className="text-center">
+          <h1 className="font-extrabold text-[rgb(var(--color-text-primary))]" style={{ fontSize: 'var(--text-xl)' }}>
+            Daily Reminders
+          </h1>
+          <p className="text-xs text-[rgb(var(--color-text-secondary))]">
+            Current time: <span className="font-bold text-[rgb(var(--color-primary))]">{currentTime}</span>
+          </p>
+        </div>
+        <div className="w-12" aria-hidden="true" />
+      </header>
+
+      {/* Container */}
+      <main className="max-w-2xl mx-auto w-full px-4 pt-4 space-y-4">
+        {/* ── NOTIFICATION PERMISSION & TEST CONTROL PANEL ── */}
+        <section className="p-4 rounded-3xl border border-[rgba(var(--color-text-primary),0.12)] bg-[rgb(var(--color-surface-card))] shadow-sm space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              {permState === 'granted' ? (
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+              ) : permState === 'denied' ? (
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+              ) : (
+                <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                  <Bell className="w-5 h-5" />
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-bold text-[rgb(var(--color-text-primary))]">
+                  {permState === 'granted'
+                    ? 'Scheduled Notifications: Active 🔔'
+                    : permState === 'denied'
+                    ? 'Notifications: Blocked in Browser ⚠️'
+                    : 'Scheduled Reminders: Setup Required 🔔'}
+                </p>
+                <p className="text-xs text-[rgb(var(--color-text-secondary))]">
+                  {permState === 'granted'
+                    ? 'Delivers gentle audio chimes and system notifications at due time'
+                    : permState === 'denied'
+                    ? 'Audio chime plays automatically as dementia-friendly fallback'
+                    : 'Enable browser permission to receive alerts at your scheduled times'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto pt-1 sm:pt-0">
+              {permState !== 'granted' && permState !== 'unsupported' && (
+                <button
+                  onClick={handleRequestPermission}
+                  className="flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold bg-[rgb(var(--color-primary))] text-white shadow-sm active:scale-95 transition-all"
+                >
+                  Enable Alerts
+                </button>
+              )}
+              <button
+                onClick={handleTestAlert}
+                disabled={isTesting}
+                className="flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold border border-[rgba(var(--color-primary),0.3)] text-[rgb(var(--color-primary))] hover:bg-[rgba(var(--color-primary),0.06)] active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              >
+                <Volume2 className="w-4 h-4" />
+                {isTesting ? 'Testing...' : 'Test Sound & Alert'}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Tab Switcher */}
+        <div className="grid grid-cols-2 p-1.5 rounded-2xl bg-[rgba(var(--color-text-primary),0.05)] border border-[rgba(var(--color-text-primary),0.08)]">
+          {(['medicine', 'appointment'] as TabKey[]).map((tab) => {
+            const isSelected = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                onClick={() => {
+                  setActiveTab(tab);
+                  setShowAddForm(false);
+                }}
+                className={`py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                  isSelected
+                    ? 'bg-[rgb(var(--color-surface-card))] text-[rgb(var(--color-primary))] shadow-sm'
+                    : 'text-[rgb(var(--color-text-secondary))] hover:text-[rgb(var(--color-text-primary))]'
+                }`}
+              >
+                {tab === 'medicine' ? '💊 Medicines' : '📅 Appointments'}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Reminder List */}
+        <div className="space-y-3">
+          <AnimatePresence initial={false}>
+            {visibleReminders.length === 0 && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-center py-12 px-4 rounded-3xl border border-dashed border-[rgba(var(--color-text-primary),0.15)]"
+              >
+                <p className="text-3xl mb-2">
+                  {activeTab === 'medicine' ? '💊' : '📅'}
+                </p>
+                <p className="font-bold text-[rgb(var(--color-text-primary))]">
+                  No {activeTab === 'medicine' ? 'medicine' : 'appointment'} reminders scheduled
+                </p>
+                <p className="text-xs text-[rgb(var(--color-text-secondary))] mt-1">
+                  Tap the button below to add your first reminder
+                </p>
+                <button
+                  onClick={() => setShowAddForm(true)}
+                  className="mt-4 px-5 py-2.5 rounded-2xl bg-[rgb(var(--color-primary))] text-white text-sm font-bold shadow-md active:scale-95 transition-all"
+                >
+                  + Add Reminder
+                </button>
+              </motion.div>
+            )}
+
+            {visibleReminders.map((r) => (
+              <ReminderCard
+                key={r.id}
+                reminder={r}
+                isDueNow={r.active && !r.done_today && r.time === currentTime}
+                isPendingDelete={pendingDeleteId === r.id}
+                onToggleActive={() => toggleActive(r.id)}
+                onMarkDone={() => markDone(r.id)}
+                onDelete={() => handleDelete(r.id)}
+              />
+            ))}
+          </AnimatePresence>
+        </div>
+
+        {/* Inline Add Form */}
+        <AnimatePresence>
+          {showAddForm && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="p-5 rounded-3xl border-2 border-[rgb(var(--color-primary))] bg-[rgb(var(--color-surface-card))] shadow-xl space-y-4"
+            >
+              <div className="flex justify-between items-center">
+                <span className="font-extrabold text-[rgb(var(--color-text-primary))]" style={{ fontSize: 'var(--text-lg)' }}>
+                  Add {activeTab === 'medicine' ? 'Medicine Reminder 💊' : 'Appointment Reminder 📅'}
+                </span>
+                <button
+                  onClick={() => setShowAddForm(false)}
+                  aria-label="Close add reminder form"
+                  className="p-2 rounded-xl text-[rgb(var(--color-text-secondary))] hover:bg-[rgba(var(--color-text-primary),0.06)]"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[rgb(var(--color-text-secondary))]">
+                  Reminder Title *
+                </label>
+                <input
+                  autoFocus
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  placeholder={activeTab === 'medicine' ? 'e.g. Memory & Blood pressure pills' : 'e.g. Memory Clinic Check-up'}
+                  className="w-full px-4 py-3 rounded-2xl border border-[rgba(var(--color-text-primary),0.15)] bg-[rgb(var(--color-surface-bg))] text-[rgb(var(--color-text-primary))] text-base outline-none focus:border-[rgb(var(--color-primary))]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[rgb(var(--color-text-secondary))]">
+                  Scheduled Time (HH:MM) *
+                </label>
+                <input
+                  type="time"
+                  value={formTime}
+                  onChange={(e) => setFormTime(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl border border-[rgba(var(--color-text-primary),0.15)] bg-[rgb(var(--color-surface-bg))] text-[rgb(var(--color-text-primary))] text-base outline-none focus:border-[rgb(var(--color-primary))]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[rgb(var(--color-text-secondary))]">
+                  Notes & Instructions (Optional)
+                </label>
+                <textarea
+                  value={formNotes}
+                  onChange={(e) => setFormNotes(e.target.value)}
+                  placeholder="e.g. Take with warm water after eating"
+                  rows={2}
+                  className="w-full px-4 py-3 rounded-2xl border border-[rgba(var(--color-text-primary),0.15)] bg-[rgb(var(--color-surface-bg))] text-[rgb(var(--color-text-primary))] text-sm outline-none resize-none focus:border-[rgb(var(--color-primary))]"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => setShowAddForm(false)}
+                  className="flex-1 py-3.5 rounded-2xl font-bold border border-[rgba(var(--color-text-primary),0.15)] text-[rgb(var(--color-text-secondary))] active:scale-95 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={!formTitle.trim()}
+                  className="flex-1 py-3.5 rounded-2xl font-bold bg-[rgb(var(--color-primary))] text-white shadow-md active:scale-95 transition-all disabled:opacity-50"
+                >
+                  Save Reminder
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+
+      {/* Floating Action Button — Positioned safely above bottom navigation */}
       {!showAddForm && (
         <button
           onClick={() => setShowAddForm(true)}
           aria-label="Add reminder"
+          className="fixed right-5 rounded-full w-14 h-14 bg-[rgb(var(--color-primary))] text-white flex items-center justify-center shadow-xl active:scale-90 transition-all z-30 hover:opacity-95"
           style={{
-            position: 'fixed',
-            bottom: '1.5rem',
-            right: '1.5rem',
-            width: 60,
-            height: 60,
-            borderRadius: '50%',
-            backgroundColor: 'rgb(var(--color-primary))',
-            color: '#fff',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-            zIndex: 100,
+            bottom: 'calc(80px + var(--safe-bottom, 0px) + 16px)',
           }}
         >
-          <Plus size={28} />
+          <Plus className="w-7 h-7" />
         </button>
       )}
     </div>
@@ -416,94 +535,47 @@ function ReminderCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -30 }}
       transition={{ duration: 0.18 }}
-      style={{
-        backgroundColor: 'rgb(var(--color-surface-card))',
-        borderRadius: 16,
-        padding: '0.875rem 1rem',
-        boxShadow: isDueNow ? '0 0 0 2px rgb(var(--color-primary))' : '0 1px 6px rgba(0,0,0,0.06)',
-        opacity: reminder.active ? 1 : 0.55,
-        position: 'relative',
-      }}
+      className={`relative p-5 rounded-3xl border transition-all ${
+        isDueNow
+          ? 'border-2 border-[rgb(var(--color-primary))] bg-[rgba(var(--color-primary),0.06)] shadow-md animate-pulse'
+          : 'border-[rgba(var(--color-text-primary),0.1)] bg-[rgb(var(--color-surface-card))] shadow-sm'
+      } ${reminder.active ? 'opacity-100' : 'opacity-60'}`}
     >
       {isDueNow && (
-        <span
-          style={{
-            position: 'absolute',
-            top: 10,
-            right: 12,
-            backgroundColor: 'rgb(var(--color-primary))',
-            color: '#fff',
-            fontSize: 'var(--text-sm)',
-            fontWeight: 700,
-            borderRadius: 8,
-            padding: '2px 8px',
-          }}
-        >
-          Due now!
+        <span className="absolute top-3 right-4 bg-[rgb(var(--color-primary))] text-white text-xs font-extrabold px-3 py-1 rounded-full shadow-sm flex items-center gap-1">
+          <Bell className="w-3.5 h-3.5" /> Due Now!
         </span>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+      <div className="flex items-start gap-4">
         {/* Icon */}
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 12,
-            backgroundColor: 'rgba(var(--color-primary), 0.12)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            color: 'rgb(var(--color-primary))',
-          }}
-        >
-          {reminder.type === 'medicine' ? <Bell size={20} /> : <Calendar size={20} />}
+        <div className="w-12 h-12 rounded-2xl bg-[rgba(var(--color-primary),0.12)] flex items-center justify-center flex-shrink-0 text-[rgb(var(--color-primary))]">
+          {reminder.type === 'medicine' ? <Bell className="w-6 h-6" /> : <Calendar className="w-6 h-6" />}
         </div>
 
         {/* Info */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div className="flex-1 min-w-0 pr-16 sm:pr-20">
+          <div className="flex items-center gap-2 flex-wrap">
             <span
-              style={{
-                fontSize: 'var(--text-base)',
-                fontWeight: 700,
-                textDecoration: reminder.done_today ? 'line-through' : 'none',
-                color: reminder.done_today
-                  ? 'rgb(var(--color-text-secondary))'
-                  : 'rgb(var(--color-text-primary))',
-              }}
+              className={`font-bold text-base leading-snug ${
+                reminder.done_today
+                  ? 'line-through text-[rgb(var(--color-text-secondary))]'
+                  : 'text-[rgb(var(--color-text-primary))]'
+              }`}
             >
               {reminder.title}
             </span>
             {reminder.done_today && (
-              <span
-                style={{
-                  fontSize: 'var(--text-sm)',
-                  color: '#22c55e',
-                  fontWeight: 600,
-                }}
-              >
-                ✓ Done
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md">
+                ✓ Taken
               </span>
             )}
           </div>
-          <span
-            style={{
-              fontSize: 'var(--text-sm)',
-              color: 'rgb(var(--color-text-secondary))',
-            }}
-          >
+          <p className="text-sm font-semibold text-[rgb(var(--color-primary))] mt-1 flex items-center gap-1">
             ⏰ {reminder.time}
-          </span>
+          </p>
           {reminder.notes ? (
-            <p
-              style={{
-                margin: '0.25rem 0 0',
-                fontSize: 'var(--text-sm)',
-                color: 'rgb(var(--color-text-secondary))',
-              }}
-            >
+            <p className="text-xs text-[rgb(var(--color-text-secondary))] mt-1 leading-relaxed">
               {reminder.notes}
             </p>
           ) : null}
@@ -511,132 +583,47 @@ function ReminderCard({
       </div>
 
       {/* Actions row */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginTop: '0.75rem',
-          paddingTop: '0.625rem',
-          borderTop: '1px solid rgba(var(--color-text-primary), 0.06)',
-          gap: '0.5rem',
-        }}
-      >
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-[rgba(var(--color-text-primary),0.07)] gap-2">
         {/* Active toggle */}
         <button
           onClick={onToggleActive}
           aria-label={reminder.active ? 'Disable reminder' : 'Enable reminder'}
-          style={{
-            padding: '0.4rem 0.875rem',
-            borderRadius: 10,
-            border: '1.5px solid rgba(var(--color-text-secondary), 0.3)',
-            backgroundColor: reminder.active ? 'rgba(var(--color-primary), 0.1)' : 'transparent',
-            color: reminder.active ? 'rgb(var(--color-primary))' : 'rgb(var(--color-text-secondary))',
-            fontSize: 'var(--text-sm)',
-            fontWeight: 600,
-            cursor: 'pointer',
-            minHeight: 44,
-          }}
+          className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all min-h-[38px] ${
+            reminder.active
+              ? 'border-[rgb(var(--color-primary))] bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]'
+              : 'border-[rgba(var(--color-text-primary),0.2)] text-[rgb(var(--color-text-secondary))]'
+          }`}
         >
-          {reminder.active ? 'Active' : 'Off'}
+          {reminder.active ? 'Active' : 'Muted'}
         </button>
 
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div className="flex items-center gap-2">
           {/* Mark done */}
           {!reminder.done_today && reminder.active && (
             <button
               onClick={onMarkDone}
               aria-label="Mark as done today"
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                border: 'none',
-                backgroundColor: '#22c55e',
-                color: '#fff',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all min-h-[38px]"
             >
-              <Check size={22} strokeWidth={3} />
+              <Check className="w-4 h-4 stroke-[3]" /> Mark Done
             </button>
           )}
 
           {/* Delete */}
           <button
             onClick={onDelete}
-            aria-label={isPendingDelete ? 'Tap again to confirm delete' : 'Delete reminder'}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              border: isPendingDelete ? '2px solid #ef4444' : 'none',
-              backgroundColor: isPendingDelete ? '#fee2e2' : 'rgba(var(--color-text-secondary), 0.1)',
-              color: isPendingDelete ? '#ef4444' : 'rgb(var(--color-text-secondary))',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s ease',
-            }}
+            aria-label={isPendingDelete ? 'Confirm delete reminder' : 'Delete reminder'}
+            className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 transition-all min-h-[38px] ${
+              isPendingDelete
+                ? 'bg-rose-600 text-white animate-pulse'
+                : 'text-rose-600 dark:text-rose-400 hover:bg-rose-500/10'
+            }`}
           >
-            <Trash2 size={18} />
+            <Trash2 className="w-4 h-4" />
+            {isPendingDelete ? 'Confirm?' : 'Delete'}
           </button>
         </div>
       </div>
-
-      {isPendingDelete && (
-        <p
-          style={{
-            margin: '0.375rem 0 0',
-            fontSize: 'var(--text-sm)',
-            color: '#ef4444',
-            textAlign: 'right',
-          }}
-        >
-          Tap again to delete
-        </p>
-      )}
     </motion.div>
   );
 }
-
-// ─── Shared Styles ────────────────────────────────────────────────────────────
-
-const backBtnStyle: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  color: 'rgb(var(--color-primary))',
-  padding: '0.5rem',
-  borderRadius: '50%',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minWidth: 44,
-  minHeight: 44,
-};
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: 'var(--text-sm)',
-  fontWeight: 600,
-  color: 'rgb(var(--color-text-secondary))',
-  marginBottom: '0.3rem',
-  marginTop: '0.625rem',
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.625rem 0.75rem',
-  borderRadius: 10,
-  border: '1.5px solid rgba(var(--color-text-secondary), 0.25)',
-  fontSize: 'var(--text-base)',
-  backgroundColor: 'rgb(var(--color-surface-bg))',
-  color: 'rgb(var(--color-text-primary))',
-  outline: 'none',
-  boxSizing: 'border-box',
-  marginBottom: '0.125rem',
-};

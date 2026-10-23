@@ -1,12 +1,14 @@
 // ---------- Accessibility ----------
 export type TextSize = 'standard' | 'large' | 'extra-large';
 export type ContrastMode = 'standard' | 'high-contrast';
+export type ThemeMode = 'light' | 'dark' | 'system';
 export type VoiceSpeed = 'slow' | 'normal' | 'fast';
 export type VoiceGender = 'female' | 'male';
 
 export interface AccessibilitySettings {
   textSize: TextSize;
   contrastMode: ContrastMode;
+  themeMode: ThemeMode;
   voiceSpeed: VoiceSpeed;
   voiceGender: VoiceGender;
   reducedMotion: boolean;

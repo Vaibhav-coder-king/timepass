@@ -23,10 +23,12 @@ import {
   Calendar,
   Clock,
   FileText,
+  BarChart2,
 } from 'lucide-react';
-import { type AnalyticsData, fetchAnalytics } from '../services/syncService';
+import { type AnalyticsData, type GameStats, fetchAnalytics } from '../services/syncService';
 import { useAuth, type UserRole } from '../context/AuthContext';
 import { getUnsyncedCount, getSessions } from '../utils/storage';
+import { ALL_GAMES, GAME_REGISTRY } from '../utils/gameRegistry';
 
 type LoadState = 'loading' | 'success' | 'error' | 'offline';
 
@@ -52,15 +54,16 @@ function CognivaTooltip({ active, payload, label }: {
   if (!active || !payload?.length) return null;
   return (
     <div
-      className="rounded-2xl px-4 py-3 shadow-xl bg-white border border-stone-200 min-w-[150px] dark:bg-slate-900 dark:border-slate-700"
+      className="rounded-2xl px-4 py-3 shadow-xl bg-white border border-stone-200 min-w-[150px] dark:bg-slate-900 dark:border-slate-700 text-stone-900 dark:text-stone-100"
     >
-      <div className="flex items-center gap-1.5 font-bold text-xs mb-1.5 text-indigo-900 border-b pb-1 dark:text-indigo-300">
+      <div className="flex items-center gap-1.5 font-bold text-xs mb-1.5 text-indigo-900 border-b pb-1 border-stone-200 dark:border-slate-800 dark:text-indigo-300">
         <Calendar className="w-3.5 h-3.5 text-indigo-500" />
         <span>{label}</span>
       </div>
       {payload.map(p => (
-        <p key={p.name} className="font-semibold text-sm" style={{ color: p.color }}>
-          {p.name}: {p.value}
+        <p key={p.name} className="font-semibold text-xs py-0.5 flex items-center justify-between gap-3">
+          <span className="text-stone-600 dark:text-stone-300">{p.name}:</span>
+          <span className="font-bold" style={{ color: p.color }}>{p.value}</span>
         </p>
       ))}
     </div>
@@ -74,6 +77,8 @@ export function CaregiverDashboard() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [currentDateTime, setCurrentDateTime] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'overview' | 'radar' | 'patients' | 'sync' | 'schemes'>('overview');
+  const [selectedGameId, setSelectedGameId] = useState<string>('all');
+  const [dateRange, setDateRange] = useState<'all' | '7d' | '30d'>('all');
 
   const role: UserRole = user?.role || 'Family';
 
@@ -113,16 +118,46 @@ export function CaregiverDashboard() {
     load();
   }, []);
 
-  const mmSource = data?.MEMORY_MATCH;
-  const dsSource = data?.DAILY_SEQUENCE;
+  const getStats = (gameId: string): GameStats => {
+    if (data?.games && data.games[gameId]) {
+      return data.games[gameId];
+    }
+    if (data && data[gameId]) {
+      return data[gameId] as GameStats;
+    }
+    return {
+      labels: [],
+      raw_time: [],
+      raw_errors: [],
+      moving_avg_time: [],
+      moving_avg_errors: [],
+      session_count: 0,
+      avg_time: 0,
+      avg_errors: 0,
+    };
+  };
 
-  const mmTimeData = mmSource
-    ? toChartData(mmSource.labels, mmSource.raw_time, mmSource.moving_avg_time, 'Raw (sec)', '3-Session Avg')
-    : [];
+  // Filter stats by date range if applicable
+  const getFilteredChartData = (stats: GameStats, type: 'time' | 'errors') => {
+    if (!stats || !stats.labels || stats.labels.length === 0) return [];
+    let labels = stats.labels;
+    let raw = type === 'time' ? stats.raw_time : stats.raw_errors;
+    let avg = type === 'time' ? stats.moving_avg_time : stats.moving_avg_errors;
 
-  const dsErrorData = dsSource
-    ? toChartData(dsSource.labels, dsSource.raw_errors, dsSource.moving_avg_errors, 'Errors', 'Moving Avg')
-    : [];
+    if (dateRange === '7d') {
+      labels = labels.slice(-7);
+      raw = raw.slice(-7);
+      avg = avg.slice(-7);
+    } else if (dateRange === '30d') {
+      labels = labels.slice(-15);
+      raw = raw.slice(-15);
+      avg = avg.slice(-15);
+    }
+
+    const rawKey = type === 'time' ? 'Raw (sec)' : 'Errors';
+    const avgKey = type === 'time' ? '3-Session Avg' : 'Moving Avg';
+    return toChartData(labels, raw, avg, rawKey, avgKey);
+  };
 
   // Default radar data across the 5 neurocognitive modules
   const radarData = (data?.radar_scores as { domain: string; score: number; module: string }[]) || [
@@ -362,70 +397,368 @@ export function CaregiverDashboard() {
         </div>
       )}
 
-      {/* ── TAB 2: Performance Curves & Longitudinal Trends ─────────────────── */}
+      {/* ── TAB 2: Performance Curves & Longitudinal Trends (ALL GAMES) ────── */}
       {activeTab === 'overview' && (
-        <div className="px-5 pt-4 space-y-5">
-          {/* Memory Match Charts */}
-          <div className="rounded-3xl p-5 bg-white border border-stone-200/80 shadow-md space-y-3 dark:bg-slate-900 dark:border-slate-800">
-            <div className="flex items-center justify-between">
+        <div className="px-5 pt-4 space-y-6">
+          {/* Controls: Game Selector & Date Range Filter */}
+          <div className="rounded-3xl p-5 bg-white border border-stone-200/80 shadow-sm space-y-4 dark:bg-slate-900 dark:border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-extrabold text-stone-900 dark:text-white">
-                  Memory Match — Response Time
+                <h3 className="text-base font-extrabold text-stone-900 dark:text-white flex items-center gap-2">
+                  <BarChart2 className="w-5 h-5 text-violet-600" />
+                  Cognitive Performance Analytics
                 </h3>
                 <p className="text-xs text-stone-500 dark:text-stone-400">
-                  Seconds per completed pair trial (Raw vs 3-session moving average)
+                  Real longitudinal metrics across all 8 neurocognitive game modules
                 </p>
               </div>
+
+              {/* Date Range Selector */}
+              <div className="flex items-center gap-1.5 bg-stone-100 p-1 rounded-2xl dark:bg-slate-800">
+                {(['all', '7d', '30d'] as const).map(range => (
+                  <button
+                    key={range}
+                    onClick={() => setDateRange(range)}
+                    className={`px-3 py-1 text-xs font-bold rounded-xl transition-all ${
+                      dateRange === range
+                        ? 'bg-white shadow text-violet-700 dark:bg-slate-700 dark:text-violet-300'
+                        : 'text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
+                    }`}
+                  >
+                    {range === 'all' ? 'All Time' : range === '7d' ? 'Past 7d' : 'Past 30d'}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {mmTimeData.length === 0 ? (
-              <p className="text-xs text-stone-400 py-6 text-center">No Memory Match sessions recorded yet.</p>
-            ) : (
-              <div className="w-full h-52">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={mmTimeData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} />
-                    <YAxis tick={{ fontSize: 10, fill: '#64748b' }} unit="s" />
-                    <Tooltip content={<CognivaTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Line type="monotone" dataKey="Raw (sec)" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="3-Session Avg" stroke="#7c3aed" strokeWidth={2.5} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
+            {/* Game Selector Chips */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 no-scrollbar">
+              <button
+                onClick={() => setSelectedGameId('all')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                  selectedGameId === 'all'
+                    ? 'bg-violet-600 text-white shadow'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-slate-800 dark:text-stone-300'
+                }`}
+              >
+                <span>🌐 All Games Overview</span>
+              </button>
 
-          {/* Daily Sequence Charts */}
-          <div className="rounded-3xl p-5 bg-white border border-stone-200/80 shadow-md space-y-3 dark:bg-slate-900 dark:border-slate-800">
-            <div>
-              <h3 className="text-base font-extrabold text-stone-900 dark:text-white">
-                Daily Sequence — Error Frequency
-              </h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400">
-                Number of ordering misplacements before correct sequence completion
-              </p>
+              {ALL_GAMES.map(game => {
+                const stats = getStats(game.id);
+                const hasData = stats.session_count > 0;
+                const isSelected = selectedGameId === game.id;
+                return (
+                  <button
+                    key={game.id}
+                    onClick={() => setSelectedGameId(game.id)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-violet-600 text-white shadow'
+                        : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-slate-800 dark:text-stone-300'
+                    }`}
+                  >
+                    <span>{game.emoji}</span>
+                    <span>{game.title}</span>
+                    {hasData && (
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                        isSelected ? 'bg-violet-800 text-violet-200' : 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300'
+                      }`}>
+                        {stats.session_count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-
-            {dsErrorData.length === 0 ? (
-              <p className="text-xs text-stone-400 py-6 text-center">No Daily Sequence sessions recorded yet.</p>
-            ) : (
-              <div className="w-full h-52">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dsErrorData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} />
-                    <YAxis tick={{ fontSize: 10, fill: '#64748b' }} />
-                    <Tooltip content={<CognivaTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Line type="monotone" dataKey="Errors" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="Moving Avg" stroke="#3b82f6" strokeWidth={2.5} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
           </div>
+
+          {/* VIEW A: ALL GAMES OVERVIEW */}
+          {selectedGameId === 'all' && (
+            <div className="space-y-5">
+              {/* Overall Multi-Game Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm dark:bg-slate-900 dark:border-slate-800">
+                  <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wider dark:text-stone-400">Total Sessions</p>
+                  <p className="text-2xl font-extrabold text-stone-900 mt-1 dark:text-white">
+                    {data?.session_count ?? ALL_GAMES.reduce((acc, g) => acc + getStats(g.id).session_count, 0)}
+                  </p>
+                  <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Recorded patient trials</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm dark:bg-slate-900 dark:border-slate-800">
+                  <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wider dark:text-stone-400">Active Modules</p>
+                  <p className="text-2xl font-extrabold text-stone-900 mt-1 dark:text-white">
+                    {ALL_GAMES.filter(g => getStats(g.id).session_count > 0).length} / {ALL_GAMES.length}
+                  </p>
+                  <p className="text-[11px] text-violet-600 font-semibold mt-0.5">Modules with baseline</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm dark:bg-slate-900 dark:border-slate-800">
+                  <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wider dark:text-stone-400">Cognitive Status</p>
+                  <p className="text-lg font-extrabold text-emerald-600 mt-1 dark:text-emerald-400">
+                    {data?.attention_needed ? 'Needs Review' : 'Stable'}
+                  </p>
+                  <p className="text-[11px] text-stone-500 font-semibold mt-0.5">Rolling 3-day error rate</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm dark:bg-slate-900 dark:border-slate-800">
+                  <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wider dark:text-stone-400">Domain Balance</p>
+                  <p className="text-lg font-extrabold text-stone-900 mt-1 dark:text-white">
+                    5-Axis Active
+                  </p>
+                  <p className="text-[11px] text-stone-500 font-semibold mt-0.5">Visual, motor, orientation</p>
+                </div>
+              </div>
+
+              {/* Render an Individual Performance Chart card for EVERY registered game */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {ALL_GAMES.map(game => {
+                  const stats = getStats(game.id);
+                  const timeChartData = getFilteredChartData(stats, 'time');
+                  const errorChartData = getFilteredChartData(stats, 'errors');
+                  const hasData = stats.session_count > 0;
+
+                  return (
+                    <div
+                      key={game.id}
+                      className="rounded-3xl p-5 bg-white border border-stone-200/80 shadow-sm space-y-3 dark:bg-slate-900 dark:border-slate-800 flex flex-col justify-between"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-3xl" aria-hidden="true">{game.emoji}</span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-base font-extrabold text-stone-900 dark:text-white">
+                                {game.title}
+                              </h4>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+                                {game.domain}
+                              </span>
+                            </div>
+                            <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                              {game.metricLabel} (Target: {game.unit})
+                            </p>
+                          </div>
+                        </div>
+
+                        {hasData ? (
+                          <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-xl dark:bg-emerald-950/40 dark:text-emerald-400">
+                            {stats.session_count} session{stats.session_count === 1 ? '' : 's'}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-semibold text-stone-400 bg-stone-100 px-2.5 py-1 rounded-xl dark:bg-slate-800 dark:text-stone-500">
+                            No data
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Chart or Empty State */}
+                      <div className="pt-2">
+                        {hasData && timeChartData.length > 0 ? (
+                          <div className="w-full h-44">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={timeChartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} />
+                                <YAxis tick={{ fontSize: 9, fill: '#64748b' }} unit="s" />
+                                <Tooltip content={<CognivaTooltip />} />
+                                <Legend wrapperStyle={{ fontSize: 10 }} />
+                                <Line type="monotone" dataKey="Raw (sec)" stroke="#f97316" strokeWidth={2} dot={{ r: 2.5 }} />
+                                <Line type="monotone" dataKey="3-Session Avg" stroke="#7c3aed" strokeWidth={2.5} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        ) : hasData && errorChartData.length > 0 ? (
+                          <div className="w-full h-44">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={errorChartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} />
+                                <YAxis tick={{ fontSize: 9, fill: '#64748b' }} />
+                                <Tooltip content={<CognivaTooltip />} />
+                                <Legend wrapperStyle={{ fontSize: 10 }} />
+                                <Line type="monotone" dataKey="Errors" stroke="#ef4444" strokeWidth={2} dot={{ r: 2.5 }} />
+                                <Line type="monotone" dataKey="Moving Avg" stroke="#3b82f6" strokeWidth={2.5} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        ) : (
+                          <div className="h-40 flex flex-col items-center justify-center text-center p-4 rounded-2xl bg-stone-50/70 border border-dashed border-stone-200 dark:bg-slate-800/50 dark:border-slate-800">
+                            <span className="text-2xl mb-1 opacity-60">{game.emoji}</span>
+                            <p className="text-xs font-bold text-stone-700 dark:text-stone-300">
+                              No recorded sessions for {game.title} yet
+                            </p>
+                            <p className="text-[11px] text-stone-400 dark:text-stone-500 mt-1 max-w-xs">
+                              Have the patient complete a trial to display longitudinal curves here.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Footer metrics if available */}
+                      {hasData && (
+                        <div className="flex items-center justify-between text-[11px] font-semibold text-stone-500 pt-2 border-t border-stone-100 dark:border-slate-800 dark:text-stone-400">
+                          <span>Avg Time: <strong className="text-stone-900 dark:text-white">{stats.avg_time ?? 0}s</strong></span>
+                          <span>Avg Errors: <strong className="text-stone-900 dark:text-white">{stats.avg_errors ?? 0}</strong></span>
+                          <button
+                            onClick={() => setSelectedGameId(game.id)}
+                            className="text-violet-600 hover:underline font-bold"
+                          >
+                            Detailed View →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW B: INDIVIDUAL SELECTED GAME PERFORMANCE */}
+          {selectedGameId !== 'all' && (() => {
+            const game = GAME_REGISTRY[selectedGameId as keyof typeof GAME_REGISTRY] || ALL_GAMES.find(g => g.id === selectedGameId);
+            const stats = getStats(selectedGameId);
+            const timeData = getFilteredChartData(stats, 'time');
+            const errorData = getFilteredChartData(stats, 'errors');
+            const hasData = stats.session_count > 0;
+
+            if (!game) return null;
+
+            return (
+              <div className="space-y-5">
+                {/* Game Hero Card */}
+                <div className="rounded-3xl p-6 bg-white border border-stone-200/80 shadow-sm dark:bg-slate-900 dark:border-slate-800">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-sm" style={{ background: game.gradient.from }}>
+                        {game.emoji}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xl font-extrabold text-stone-900 dark:text-white">
+                            {game.title}
+                          </h3>
+                          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+                            {game.domain}
+                          </span>
+                        </div>
+                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-xl">
+                          {game.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedGameId('all')}
+                      className="px-4 py-2 rounded-xl text-xs font-bold border border-stone-200 hover:bg-stone-50 dark:border-slate-700 dark:hover:bg-slate-800 transition-all self-start sm:self-auto"
+                    >
+                      ← Back to All Games
+                    </button>
+                  </div>
+
+                  {/* Summary Bar */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-stone-100 dark:border-slate-800">
+                    <div className="p-3 rounded-xl bg-stone-50 dark:bg-slate-800">
+                      <p className="text-[10px] font-bold text-stone-400 uppercase">Recorded Plays</p>
+                      <p className="text-lg font-extrabold text-stone-900 dark:text-white">{stats.session_count}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-stone-50 dark:bg-slate-800">
+                      <p className="text-[10px] font-bold text-stone-400 uppercase">Average Duration</p>
+                      <p className="text-lg font-extrabold text-violet-600 dark:text-violet-400">{stats.avg_time ?? 0}s</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-stone-50 dark:bg-slate-800">
+                      <p className="text-[10px] font-bold text-stone-400 uppercase">Average Errors</p>
+                      <p className="text-lg font-extrabold text-amber-600 dark:text-amber-400">{stats.avg_errors ?? 0}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-stone-50 dark:bg-slate-800">
+                      <p className="text-[10px] font-bold text-stone-400 uppercase">Difficulty Tier</p>
+                      <p className="text-lg font-extrabold text-stone-900 dark:text-white">{game.difficulty.split('—')[0]}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Performance Charts */}
+                {hasData ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {/* Time Curve */}
+                    <div className="rounded-3xl p-5 bg-white border border-stone-200/80 shadow-sm space-y-3 dark:bg-slate-900 dark:border-slate-800">
+                      <div>
+                        <h4 className="text-base font-extrabold text-stone-900 dark:text-white">
+                          Response Time & Speed Curve
+                        </h4>
+                        <p className="text-xs text-stone-500 dark:text-stone-400">
+                          Seconds per session trial (Raw vs 3-session moving average)
+                        </p>
+                      </div>
+
+                      <div className="w-full h-56">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={timeData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} />
+                            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} unit="s" />
+                            <Tooltip content={<CognivaTooltip />} />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <Line type="monotone" dataKey="Raw (sec)" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
+                            <Line type="monotone" dataKey="3-Session Avg" stroke="#7c3aed" strokeWidth={2.5} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Error Curve */}
+                    <div className="rounded-3xl p-5 bg-white border border-stone-200/80 shadow-sm space-y-3 dark:bg-slate-900 dark:border-slate-800">
+                      <div>
+                        <h4 className="text-base font-extrabold text-stone-900 dark:text-white">
+                          Error Frequency & Mistake Curve
+                        </h4>
+                        <p className="text-xs text-stone-500 dark:text-stone-400">
+                          Unassisted missteps and retry counts per session
+                        </p>
+                      </div>
+
+                      <div className="w-full h-56">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={errorData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} />
+                            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} />
+                            <Tooltip content={<CognivaTooltip />} />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <Line type="monotone" dataKey="Errors" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} />
+                            <Line type="monotone" dataKey="Moving Avg" stroke="#3b82f6" strokeWidth={2.5} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-3xl p-12 bg-white border border-stone-200/80 shadow-sm text-center space-y-3 dark:bg-slate-900 dark:border-slate-800">
+                    <div className="w-16 h-16 rounded-full bg-violet-100 dark:bg-slate-800 text-3xl mx-auto flex items-center justify-center">
+                      {game.emoji}
+                    </div>
+                    <h4 className="text-lg font-extrabold text-stone-900 dark:text-white">
+                      No Recorded Sessions for {game.title}
+                    </h4>
+                    <p className="text-sm text-stone-500 dark:text-stone-400 max-w-md mx-auto leading-relaxed">
+                      {game.title} is designed to exercise <strong>{game.domain}</strong>.
+                      Once the patient plays this game on their device, their response time, errors, and progress over time will automatically appear in this chart.
+                    </p>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => navigate(game.route)}
+                        className="px-5 py-2.5 rounded-xl font-bold bg-violet-600 text-white hover:bg-violet-700 transition-all text-xs"
+                      >
+                        Launch {game.title} to Test
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
