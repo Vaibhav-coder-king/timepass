@@ -14,7 +14,7 @@
  */
 
 import { getSessions, markSynced, getUnsyncedCount, type GameSession } from '../utils/storage';
-import { ALL_GAMES } from '../utils/gameRegistry';
+import { HUB_GAMES } from '../utils/gameRegistry';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -260,18 +260,9 @@ export function computeLocalAnalytics(): AnalyticsData {
   };
 
   const gamesMap: Record<string, GameStats> = {};
-  for (const game of ALL_GAMES) {
+  for (const game of HUB_GAMES) {
     const matched = allSessions.filter(s => s.game === game.id);
     gamesMap[game.id] = buildStats(matched);
-  }
-
-  // Also include any other game keys present in stored sessions
-  const dynamicGameIds = new Set(allSessions.map(s => s.game));
-  for (const gid of dynamicGameIds) {
-    if (gid && !gamesMap[gid]) {
-      const matched = allSessions.filter(s => s.game === gid);
-      gamesMap[gid] = buildStats(matched);
-    }
   }
 
   const mmStats = gamesMap['MEMORY_MATCH'] || EMPTY_GAME_STATS;
@@ -285,7 +276,7 @@ export function computeLocalAnalytics(): AnalyticsData {
     attention_needed,
     session_count: allSessions.length,
     games: gamesMap,
-    registered_games: ALL_GAMES.map(g => g.id),
+    registered_games: HUB_GAMES.map(g => g.id),
     ...gamesMap,
   };
 

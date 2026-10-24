@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useTimeOfDayGreeting } from '../../hooks/useTimeOfDayGreeting';
 import { useLanguage } from '../../context/LanguageContext';
+import { BCP47_LOCALE_MAP } from '../../services/geminiService';
 import type { PatientProfile } from '../../types/types';
 
 interface GreetingHeaderProps {
@@ -13,11 +14,11 @@ interface GreetingHeaderProps {
  */
 export function GreetingHeader({ patient }: GreetingHeaderProps) {
   const { greetingKey, subtextKey, emoji } = useTimeOfDayGreeting();
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
 
   const name = patient?.displayName ?? 'Friend';
 
-  const today = new Date().toLocaleDateString('en-IN', {
+  const today = new Date().toLocaleDateString(BCP47_LOCALE_MAP[locale] || 'en-IN', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',

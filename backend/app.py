@@ -402,8 +402,6 @@ REGISTERED_GAMES = [
     "REALITY_ANCHOR",
     "ACOUSTIC_RECOGNITION",
     "TREMOR_TELEMETRY",
-    "CLOCK_DRAW",
-    "PATTERN_ASSOCIATION",
 ]
 
 
@@ -491,11 +489,12 @@ def analytics():
     )
 
     radar_scores = [
-        {"domain": "Visuospatial", "score": 82, "module": "Clock Draw", "description": "Construction & spatial arrangement"},
-        {"domain": "Attention", "score": 78, "module": "Audio Stroop", "description": "Cognitive inhibition & stimulus focus"},
-        {"domain": "Orientation", "score": 88, "module": "Reality Anchor", "description": "Temporal & situational awareness"},
-        {"domain": "Auditory", "score": 74, "module": "Acoustic Rec", "description": "Environmental sound identification"},
-        {"domain": "Motor Stability", "score": 91, "module": "Tremor Telemetry", "description": "Controlled hand holding consistency"},
+        {"domain": "Visual Recall", "score": 85, "module": "Memory Match", "description": "Short-term visual pattern & pair recall"},
+        {"domain": "Routine Recall", "score": 82, "module": "Daily Sequence", "description": "Executive routine & daily order recall"},
+        {"domain": "Attention", "score": 78, "module": "Listen & Tap", "description": "Cognitive inhibition & stimulus focus"},
+        {"domain": "Orientation", "score": 88, "module": "Today's World", "description": "Temporal & situational awareness"},
+        {"domain": "Auditory", "score": 74, "module": "Sounds Around", "description": "Environmental sound identification"},
+        {"domain": "Motor Stability", "score": 91, "module": "Steady Hand", "description": "Controlled hand holding consistency"},
     ]
 
     if not rows:

@@ -28,7 +28,7 @@ import {
 import { type AnalyticsData, type GameStats, fetchAnalytics } from '../services/syncService';
 import { useAuth, type UserRole } from '../context/AuthContext';
 import { getUnsyncedCount, getSessions } from '../utils/storage';
-import { ALL_GAMES, GAME_REGISTRY } from '../utils/gameRegistry';
+import { HUB_GAMES, GAME_REGISTRY } from '../utils/gameRegistry';
 
 type LoadState = 'loading' | 'success' | 'error' | 'offline';
 
@@ -159,13 +159,14 @@ export function CaregiverDashboard() {
     return toChartData(labels, raw, avg, rawKey, avgKey);
   };
 
-  // Default radar data across the 5 neurocognitive modules
+  // Default radar data across active game modules
   const radarData = (data?.radar_scores as { domain: string; score: number; module: string }[]) || [
-    { domain: 'Visuospatial', score: 82, module: 'Clock Draw' },
-    { domain: 'Attention', score: 78, module: 'Audio Stroop' },
-    { domain: 'Orientation', score: 88, module: 'Reality Anchor' },
-    { domain: 'Auditory Rec', score: 74, module: 'Acoustic Rec' },
-    { domain: 'Motor Stability', score: 91, module: 'Tremor Telemetry' },
+    { domain: 'Visual Recall', score: 85, module: 'Memory Match' },
+    { domain: 'Routine Recall', score: 82, module: 'Daily Sequence' },
+    { domain: 'Attention', score: 78, module: 'Listen & Tap' },
+    { domain: 'Orientation', score: 88, module: "Today's World" },
+    { domain: 'Auditory Rec', score: 74, module: 'Sounds Around' },
+    { domain: 'Motor Stability', score: 91, module: 'Steady Hand' },
   ];
 
   const unsyncedCount = getUnsyncedCount();
@@ -444,7 +445,7 @@ export function CaregiverDashboard() {
                 <span>🌐 All Games Overview</span>
               </button>
 
-              {ALL_GAMES.map(game => {
+              {HUB_GAMES.map(game => {
                 const stats = getStats(game.id);
                 const hasData = stats.session_count > 0;
                 const isSelected = selectedGameId === game.id;
@@ -481,7 +482,7 @@ export function CaregiverDashboard() {
                 <div className="p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm dark:bg-slate-900 dark:border-slate-800">
                   <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wider dark:text-stone-400">Total Sessions</p>
                   <p className="text-2xl font-extrabold text-stone-900 mt-1 dark:text-white">
-                    {data?.session_count ?? ALL_GAMES.reduce((acc, g) => acc + getStats(g.id).session_count, 0)}
+                    {data?.session_count ?? HUB_GAMES.reduce((acc, g) => acc + getStats(g.id).session_count, 0)}
                   </p>
                   <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Recorded patient trials</p>
                 </div>
@@ -489,7 +490,7 @@ export function CaregiverDashboard() {
                 <div className="p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm dark:bg-slate-900 dark:border-slate-800">
                   <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wider dark:text-stone-400">Active Modules</p>
                   <p className="text-2xl font-extrabold text-stone-900 mt-1 dark:text-white">
-                    {ALL_GAMES.filter(g => getStats(g.id).session_count > 0).length} / {ALL_GAMES.length}
+                    {HUB_GAMES.filter(g => getStats(g.id).session_count > 0).length} / {HUB_GAMES.length}
                   </p>
                   <p className="text-[11px] text-violet-600 font-semibold mt-0.5">Modules with baseline</p>
                 </div>
@@ -513,7 +514,7 @@ export function CaregiverDashboard() {
 
               {/* Render an Individual Performance Chart card for EVERY registered game */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {ALL_GAMES.map(game => {
+                {HUB_GAMES.map(game => {
                   const stats = getStats(game.id);
                   const timeChartData = getFilteredChartData(stats, 'time');
                   const errorChartData = getFilteredChartData(stats, 'errors');
@@ -618,7 +619,7 @@ export function CaregiverDashboard() {
 
           {/* VIEW B: INDIVIDUAL SELECTED GAME PERFORMANCE */}
           {selectedGameId !== 'all' && (() => {
-            const game = GAME_REGISTRY[selectedGameId as keyof typeof GAME_REGISTRY] || ALL_GAMES.find(g => g.id === selectedGameId);
+            const game = GAME_REGISTRY[selectedGameId as keyof typeof GAME_REGISTRY] || HUB_GAMES.find(g => g.id === selectedGameId);
             const stats = getStats(selectedGameId);
             const timeData = getFilteredChartData(stats, 'time');
             const errorData = getFilteredChartData(stats, 'errors');

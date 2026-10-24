@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import type { MiraState } from '../types/types';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { useAccessibility } from '../context/AccessibilityContext';
+import { BCP47_LOCALE_MAP } from '../services/geminiService';
 
 interface UseMiraVoiceStateOptions {
   onTranscript: (text: string) => void;
@@ -58,7 +59,7 @@ export function useMiraVoiceState({
   );
 
   const { startListening, stopListening } = useSpeechRecognition({
-    languageCode: `${settings.languageCode}-${settings.languageCode.toUpperCase()}`,
+    languageCode: BCP47_LOCALE_MAP[settings.languageCode] || 'en-IN',
     onInterimTranscript: handleInterim,
     onFinalTranscript: handleFinalTranscript,
     onError: handleError,

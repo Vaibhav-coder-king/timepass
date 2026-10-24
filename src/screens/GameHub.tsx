@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { SyncIndicator } from '../components/SyncIndicator';
 import { getUnsyncedCount } from '../utils/storage';
 import { useState } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 
 // ─── Game card data ───────────────────────────────────────────────────────────
 
@@ -117,6 +118,7 @@ const GAME_CARDS: GameCardData[] = [
 
 export function GameHub() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [syncTrigger] = useState(getUnsyncedCount());
 
   return (
@@ -128,7 +130,7 @@ export function GameHub() {
       <header className="flex items-center justify-between px-5 pt-8 pb-4">
         <button
           onClick={() => navigate('/')}
-          aria-label="Go back to Home"
+          aria-label={t('common.backToHome')}
           className="flex items-center justify-center rounded-2xl w-14 h-14 transition-all active:scale-95 active:opacity-75 hover:bg-[rgba(var(--color-primary),0.08)] border border-[rgba(var(--color-text-primary),0.1)] bg-[rgb(var(--color-surface-card))]"
           style={{ color: 'rgb(var(--color-text-primary))' }}
         >
@@ -140,10 +142,10 @@ export function GameHub() {
             className="font-extrabold text-[rgb(var(--color-text-primary))]"
             style={{ fontFamily: 'Nunito, Inter, sans-serif', fontSize: 'var(--text-2xl)' }}
           >
-            Let's Play
+            {t('play')}
           </h1>
           <p className="text-[rgb(var(--color-text-secondary))]" style={{ fontSize: 'var(--text-sm)' }}>
-            Choose a game to begin
+            {t('prompt')}
           </p>
         </div>
 
@@ -256,7 +258,7 @@ export function GameHub() {
                 fontSize: 'var(--text-lg)',
               }}
             >
-              Tap to Play →
+              {t('play')} →
             </div>
           </motion.button>
         ))}

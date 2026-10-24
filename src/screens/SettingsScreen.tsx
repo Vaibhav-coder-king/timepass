@@ -25,6 +25,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAccessibility } from '../context/AccessibilityContext';
+import { useLanguage } from '../context/LanguageContext';
 import { ContrastToggle } from '../components/accessibility/ContrastToggle';
 import { LANGUAGE_LIST } from '../context/translations';
 import type { TextSize, VoiceSpeed } from '../types/types';
@@ -48,6 +49,7 @@ const GEMINI_MODELS = [
 
 export function SettingsScreen() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const {
     settings,
     setTextSize,
@@ -278,7 +280,7 @@ export function SettingsScreen() {
         <motion.button
           onClick={() => navigate('/')}
           whileTap={{ scale: 0.94 }}
-          aria-label="Back to Home"
+          aria-label={t('common.backToHome')}
           className="flex items-center justify-center rounded-2xl w-14 h-14 active:opacity-80 transition-all border border-[rgba(var(--color-text-primary),0.12)] bg-[rgb(var(--color-surface-card))]"
           style={{ color: 'rgb(var(--color-text-primary))' }}
         >
@@ -289,7 +291,7 @@ export function SettingsScreen() {
             className="font-extrabold text-[rgb(var(--color-text-primary))]"
             style={{ fontSize: 'var(--text-xl)' }}
           >
-            Settings & Setup
+            {t('settings.title')}
           </h1>
           <p className="text-xs text-[rgb(var(--color-text-secondary))]">
             Personalisation, MIRA AI & Accessibility
@@ -443,7 +445,7 @@ export function SettingsScreen() {
             {/* Editable Patient Display Name */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-[rgb(var(--color-text-secondary))] flex items-center justify-between">
-                <span>Patient Display Name *</span>
+                <span>{t('settings.patientName')} *</span>
                 {patientName !== initialPatientName && (
                   <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold">
                     (Modified)
@@ -508,7 +510,7 @@ export function SettingsScreen() {
                 onClick={handleCancelProfile}
                 className="px-5 py-3.5 rounded-2xl font-bold border border-[rgba(var(--color-text-primary),0.2)] text-[rgb(var(--color-text-secondary))] hover:bg-[rgba(var(--color-text-primary),0.05)] active:scale-98 transition-all flex items-center justify-center gap-1.5"
               >
-                <X className="w-4 h-4" /> Cancel
+                <X className="w-4 h-4" /> {t('common.cancel')}
               </button>
             )}
             <button
@@ -516,7 +518,7 @@ export function SettingsScreen() {
               onClick={handleSaveProfile}
               className="flex-1 py-3.5 rounded-2xl font-bold bg-[rgb(var(--color-primary))] text-white shadow-md active:scale-98 transition-all hover:opacity-95 flex items-center justify-center gap-2"
             >
-              <Save className="w-4 h-4" /> Save Patient Profile
+              <Save className="w-4 h-4" /> {t('common.save')}
             </button>
           </div>
         </section>
@@ -540,7 +542,7 @@ export function SettingsScreen() {
           {/* Theme Mode Toggle (Compact, Centered, 3-Option) */}
           <div className="space-y-2.5">
             <label className="text-sm font-bold text-[rgb(var(--color-text-primary))]">
-              Theme & Contrast (Light / Dark / System)
+              {t('settings.theme')}
             </label>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-[rgba(var(--color-text-primary),0.1)] bg-[rgb(var(--color-surface-bg))] gap-3">
               <div>
@@ -558,7 +560,7 @@ export function SettingsScreen() {
           {/* Text Size */}
           <div className="space-y-2.5">
             <label className="text-sm font-bold text-[rgb(var(--color-text-primary))]">
-              Text Size
+              {t('settings.textSize')}
             </label>
             <div className="grid grid-cols-3 gap-3">
               {[
@@ -740,7 +742,7 @@ export function SettingsScreen() {
               </div>
               <div>
                 <h2 className="font-bold text-[rgb(var(--color-text-primary))]" style={{ fontSize: 'var(--text-lg)' }}>
-                  Language & Locale (20 Languages)
+                  {t('settings.language')} (20 Languages)
                 </h2>
                 <p className="text-xs text-[rgb(var(--color-text-secondary))]">
                   Indian regional (Assamese, Hindi, Bengali, etc.) & International with RTL support

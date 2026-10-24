@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLanguage } from '../context/LanguageContext';
 import {
   ArrowLeft,
   Plus,
@@ -120,6 +121,7 @@ function saveReminders(reminders: Reminder[]): void {
 
 export function RemindersScreen() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<TabKey>('medicine');
   const [reminders, setReminders] = useState<Reminder[]>(loadReminders);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -271,7 +273,7 @@ export function RemindersScreen() {
       <header className="sticky top-0 z-20 flex items-center justify-between px-5 pt-5 pb-3 border-b border-[rgba(var(--color-text-primary),0.08)] bg-[rgba(var(--color-surface-bg),0.96)] backdrop-blur-md">
         <button
           onClick={() => navigate('/')}
-          aria-label="Go back to Home"
+          aria-label={t('common.backToHome')}
           className="flex items-center justify-center rounded-2xl w-12 h-12 active:opacity-75 transition-all border border-[rgba(var(--color-text-primary),0.12)] bg-[rgb(var(--color-surface-card))]"
           style={{ color: 'rgb(var(--color-text-primary))' }}
         >
@@ -279,7 +281,7 @@ export function RemindersScreen() {
         </button>
         <div className="text-center">
           <h1 className="font-extrabold text-[rgb(var(--color-text-primary))]" style={{ fontSize: 'var(--text-xl)' }}>
-            Daily Reminders
+            {t('reminders.title')}
           </h1>
           <p className="text-xs text-[rgb(var(--color-text-secondary))]">
             Current time: <span className="font-bold text-[rgb(var(--color-primary))]">{currentTime}</span>
@@ -363,7 +365,7 @@ export function RemindersScreen() {
                     : 'text-[rgb(var(--color-text-secondary))] hover:text-[rgb(var(--color-text-primary))]'
                 }`}
               >
-                {tab === 'medicine' ? '💊 Medicines' : '📅 Appointments'}
+                {tab === 'medicine' ? `💊 ${t('reminders.medicine')}` : `📅 ${t('reminders.appointment')}`}
               </button>
             );
           })}
@@ -477,14 +479,14 @@ export function RemindersScreen() {
                   onClick={() => setShowAddForm(false)}
                   className="flex-1 py-3.5 rounded-2xl font-bold border border-[rgba(var(--color-text-primary),0.15)] text-[rgb(var(--color-text-secondary))] active:scale-95 transition-all"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={!formTitle.trim()}
                   className="flex-1 py-3.5 rounded-2xl font-bold bg-[rgb(var(--color-primary))] text-white shadow-md active:scale-95 transition-all disabled:opacity-50"
                 >
-                  Save Reminder
+                  {t('common.save')}
                 </button>
               </div>
             </motion.div>
@@ -528,6 +530,7 @@ function ReminderCard({
   onMarkDone,
   onDelete,
 }: ReminderCardProps) {
+  const { t } = useLanguage();
   return (
     <motion.div
       layout
@@ -567,7 +570,7 @@ function ReminderCard({
             </span>
             {reminder.done_today && (
               <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md">
-                ✓ Taken
+                ✓ {t('common.done')}
               </span>
             )}
           </div>
@@ -605,7 +608,7 @@ function ReminderCard({
               aria-label="Mark as done today"
               className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all min-h-[38px]"
             >
-              <Check className="w-4 h-4 stroke-[3]" /> Mark Done
+              <Check className="w-4 h-4 stroke-[3]" /> {t('common.done')}
             </button>
           )}
 
@@ -620,7 +623,7 @@ function ReminderCard({
             }`}
           >
             <Trash2 className="w-4 h-4" />
-            {isPendingDelete ? 'Confirm?' : 'Delete'}
+            {isPendingDelete ? 'Confirm?' : t('common.delete')}
           </button>
         </div>
       </div>
